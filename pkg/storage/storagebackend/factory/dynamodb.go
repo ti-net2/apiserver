@@ -1,9 +1,9 @@
 package factory
 
 import (
-	"gofreezer/pkg/storage"
-	"gofreezer/pkg/storage/awsdynamodb/dynamodb"
-	"gofreezer/pkg/storage/storagebackend"
+	"k8s.io/apiserver/pkg/storage"
+	"k8s.io/apiserver/pkg/storage/awsdynamodb/dynamodb"
+	"k8s.io/apiserver/pkg/storage/storagebackend"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"

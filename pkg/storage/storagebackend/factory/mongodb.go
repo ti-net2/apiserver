@@ -3,9 +3,9 @@ package factory
 import (
 	"time"
 
-	"gofreezer/pkg/storage"
-	"gofreezer/pkg/storage/mongodbs/mongodb"
-	"gofreezer/pkg/storage/storagebackend"
+	"k8s.io/apiserver/pkg/storage"
+	"k8s.io/apiserver/pkg/storage/mongodbs/mongodb"
+	"k8s.io/apiserver/pkg/storage/storagebackend"
 
 	"gopkg.in/mgo.v2"
 
