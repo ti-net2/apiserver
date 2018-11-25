@@ -11,17 +11,24 @@ See docs/ for more information about the  project.
 package mysql
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
+	"time"
 
 	"k8s.io/apiserver/pkg/storage/mysqls"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/conversion"
-	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/storage"
+	utiltrace "k8s.io/apiserver/pkg/util/trace"
 
 	"github.com/golang/glog"
 	dbmysql "github.com/jinzhu/gorm"
@@ -39,9 +46,13 @@ type store struct {
 	storageVersion string
 }
 
-type RowResult struct {
-	data        []byte
-	resourceKey string
+//dataModel
+type dataModel struct {
+	ID        int64  `gorm:"column:id;AUTO_INCREMENT;PRIMARY_KEY"`
+	Name      string `gorm:"column:name;UNIQUE_INDEX:resource_idx"`
+	Namespace string `gorm:"column:namespace;DEFAULT:'';UNIQUE_INDEX:resource_idx"`
+	Revision  int64  `gorm:"column:revision"`
+	Obj       []byte `gorm:"column:obj;NOT NULL;size:10240"`
 }
 
 //New create a mysql store
@@ -75,210 +86,346 @@ func (s *store) Versioner() storage.Versioner {
 	return s.versioner
 }
 
-func (s *store) Create(ctx context.Context, key string, obj, out runtime.Object, ttl uint64) error {
-	err := s.GetResourceWithKey(ctx, key, out, true)
-	if err != nil {
-		return err
-	}
-	table := s.table(ctx, out)
-
-	err = table.ExtractTableObj(obj, func(tObj reflect.Value) error {
-
-		data, err := runtime.Encode(s.codec, obj)
-		if err != nil {
-			return storage.NewInternalErrorf("key %v, object encode error %v", key, err.Error())
-		}
-		rawObjField := table.freezerTag[jsonTagRawObj].structField
-		tObj.FieldByName(rawObjField).SetBytes(data)
-
-		glog.V(9).Infof("insert into %s with obj (%+v)  ", table.name, tObj)
-		err = s.client.Table(table.name).Create(tObj.Addr().Interface()).Error
-		if err != nil {
-			return storage.NewInternalErrorf(key, err.Error())
-		}
-		return nil
-	})
-	if err != nil {
-		return err
+func (s *store) Get(ctx context.Context, key string, resourceVersion string, out runtime.Object, ignoreNotFound bool) error {
+	kind, resource := extractKey(key)
+	if len(kind) == 0 || len(resource) == 0 {
+		return storage.NewKeyNotFoundError(key, 0)
 	}
 
-	return s.GetResourceWithKey(ctx, key, out, false)
+	//query := fmt.Sprintf("name = ? AND namespace = ")
+	query := fmt.Sprintf("name = ?")
+	queryArgsName := resource
+
+	outData := &dataModel{}
+	err := s.client.Table(kind).Where(query, queryArgsName).Limit(1).Find(outData).Error
+	if err != nil {
+		if dbmysql.IsRecordNotFoundError(err) {
+			if ignoreNotFound {
+				return runtime.SetZeroValue(out)
+			}
+			return storage.NewKeyNotFoundError(key, 0)
+		}
+		return storage.NewInternalErrorf(key, err.Error())
+	}
+	return decode(s.codec, s.versioner, outData.Obj, out, outData.Revision)
 }
 
-func (s *store) Delete(ctx context.Context, key string, out runtime.Object, preconditions *storage.Preconditions) error {
-
-	err := s.GetResourceWithKey(ctx, key, out, false)
-	if err != nil {
-		return err
+func (s *store) Create(ctx context.Context, key string, obj, out runtime.Object, ttl uint64) error {
+	if version, err := s.versioner.ObjectResourceVersion(obj); err == nil && version != 0 {
+		return errors.New("resourceVersion should not be set on objects to be created")
 	}
-	table := s.table(ctx, out)
+	if err := s.versioner.PrepareObjectForStorage(obj); err != nil {
+		return fmt.Errorf("PrepareObjectForStorage failed: %v", err)
+	}
 
-	delObj := reflect.New(table.obj.Type())
+	kind, resource := extractKey(key)
+	if len(kind) == 0 || len(resource) == 0 {
+		return storage.NewKeyNotFoundError(key, 0)
+	}
 
-	query := fmt.Sprintf("%s = ?", table.resoucekey)
-	args := GetActualResourceKey(key)
-	err = s.client.Table(table.name).Where(query, args).Delete(delObj).Error
+	if !s.client.HasTable(kind) {
+		if err := s.client.Table(kind).CreateTable(&dataModel{}).Error; err != nil {
+			return storage.NewInternalErrorf(key, err.Error())
+		}
+	}
+
+	data := &dataModel{
+		Name: resource,
+	}
+	var err error
+	data.Obj, err = runtime.Encode(s.codec, obj)
+	if err != nil {
+		return storage.NewInternalErrorf("key %v, object encode error %v", key, err.Error())
+	}
+
+	err = s.client.Table(kind).Create(data).Error
 	if err != nil {
 		return storage.NewInternalErrorf(key, err.Error())
 	}
 
-	return err
+	return decode(s.codec, s.versioner, data.Obj, out, 0)
 }
 
-func (s *store) Watch(ctx context.Context, key string, resourceVersion string, p storage.SelectionPredicate) (watch.Interface, error) {
-	return nil, storage.NewInternalError(fmt.Sprintf("the backend of mysql not support wath"))
-}
+func (s *store) Delete(ctx context.Context, key string, out runtime.Object, preconditions *storage.Preconditions) error {
 
-func (s *store) WatchList(ctx context.Context, key string, resourceVersion string, p storage.SelectionPredicate) (watch.Interface, error) {
-	return nil, storage.NewInternalError(fmt.Sprintf("the backend of mysql not support wath"))
-}
-
-func (s *store) Get(ctx context.Context, key string, resourceVersion string, objPtr runtime.Object, ignoreNotFound bool) error {
-
-	return s.GetResourceWithKey(ctx, key, objPtr, ignoreNotFound)
-}
-
-func (s *store) GetToList(ctx context.Context, key string, resourceVersion string, p storage.SelectionPredicate, listObj runtime.Object) error {
-
-	listPtr, itemPtrObj, err := GetListItemObj(listObj)
+	_, err := conversion.EnforcePtr(out)
 	if err != nil {
-		return storage.NewInvalidObjError(key, err.Error())
+		panic("unable to convert output object to pointer")
 	}
 
-	rowList, _, err := s.doQuery(ctx, key, itemPtrObj, p)
+	kind, resource := extractKey(key)
+	if len(kind) == 0 || len(resource) == 0 {
+		return storage.NewKeyNotFoundError(key, 0)
+	}
+
+	if err := s.Get(ctx, key, "", out, false); err != nil {
+		return storage.NewInternalErrorf(key, err.Error())
+	}
+
+	//query := fmt.Sprintf("name = ? AND namespace = ")
+	query := fmt.Sprintf("name = ?")
+	queryArgsName := resource
+
+	err = s.client.Table(kind).Where(query, queryArgsName).Delete(dataModel{}).Error
 	if err != nil {
-		return err
+		return storage.NewInternalErrorf(key, err.Error())
 	}
 
-	if len(rowList) == 0 {
-		return nil
-	}
-
-	if err := decodeList(rowList, listPtr, s.codec, s.versioner); err != nil {
-		return err
-	}
 	return nil
 }
 
-func (s *store) List(ctx context.Context, key string, resourceVersion string, p storage.SelectionPredicate, listObj runtime.Object) error {
-	return s.GetToList(ctx, key, resourceVersion, p, listObj)
-}
+// GuaranteedUpdate implements storage.Interface.GuaranteedUpdate.
+func (s *store) GuaranteedUpdate(
+	ctx context.Context, key string, out runtime.Object, ignoreNotFound bool,
+	preconditions *storage.Preconditions, tryUpdate storage.UpdateFunc, suggestion ...runtime.Object) error {
+	trace := utiltrace.New(fmt.Sprintf("GuaranteedUpdate etcd3: %s", reflect.TypeOf(out).String()))
+	defer trace.LogIfLong(500 * time.Millisecond)
 
-func (s *store) GuaranteedUpdate(ctx context.Context, key string, out runtime.Object, ignoreNotFound bool,
-	precondtions *storage.Preconditions, tryUpdate storage.UpdateFunc, suggestion ...runtime.Object) error {
-
-	exist := true
-	err := s.GetResourceWithKey(ctx, key, out, false)
+	v, err := conversion.EnforcePtr(out)
 	if err != nil {
-		if storage.IsNotFound(err) {
-			glog.V(9).Infof("item not found check if allow create on update(%v)\r\n", err)
-			exist = false
-		} else {
-			return err
+		panic("unable to convert output object to pointer")
+	}
+
+	kind, resource := extractKey(key)
+	if len(kind) == 0 || len(resource) == 0 {
+		return storage.NewKeyNotFoundError(key, 0)
+	}
+
+	if !s.client.HasTable(kind) {
+		if err := s.client.Table(kind).CreateTable(&dataModel{}).Error; err != nil {
+			return storage.NewInternalErrorf(key, err.Error())
 		}
 	}
-	table := s.table(ctx, out)
 
-	ret, _, err := s.userUpdate(out, tryUpdate)
+	//query := fmt.Sprintf("name = ? AND namespace = ")
+	query := fmt.Sprintf("name = ?")
+	queryArgsName := resource
+
+	oriData := &dataModel{}
+	dbhandle := s.client.Table(kind).Where(query, queryArgsName)
+	err = dbhandle.Limit(1).Find(oriData).Error
+	if err != nil {
+		if dbmysql.IsRecordNotFoundError(err) {
+			if !ignoreNotFound {
+				return storage.NewKeyNotFoundError(key, 0)
+			}
+		} else {
+			return storage.NewInternalErrorf(key, err.Error())
+		}
+	}
+
+	oriObject := reflect.New(v.Type()).Interface().(runtime.Object)
+	if oriObject != nil {
+		if err := decode(s.codec, s.versioner, oriData.Obj, oriObject, 0); err != nil {
+			return storage.NewInternalErrorf("decode origin data key %s error:%v", key, err.Error())
+		}
+	}
+
+	ret, _, err := s.updateObj(oriObject, tryUpdate)
 	if err != nil {
 		glog.V(9).Infof("user update error :%v\r\n", err)
 		return storage.NewInternalErrorf("key %s error:%v", key, err.Error())
 	}
 
-	if exist {
-		//build update fields
-		// update := make(map[string]interface{})
-
-		query := fmt.Sprintf("%s = ?", table.resoucekey)
-		args := GetActualResourceKey(key)
-		dbhandler := s.client.Table(table.name).Where(query, args)
-		err = table.ExtractTableObj(ret, func(obj reflect.Value) error {
-			//update all fields
-
-			//encode object update rawobj filed
-			data, err := runtime.Encode(s.codec, ret)
-			if err != nil {
-				return storage.NewInternalErrorf("key %v, object encode error %v", key, err.Error())
-			}
-			rawObjField := table.freezerTag[jsonTagRawObj].structField
-			obj.FieldByName(rawObjField).SetBytes(data)
-
-			upMap := table.ObjMapField(obj, nil, true)
-			dbhandler = dbhandler.Updates(upMap)
-
-			// if len(fields) == 0 {
-			// 	//encode object update rawobj filed
-			// 	data, err := runtime.Encode(s.codec, ret)
-			// 	if err != nil {
-			// 		return storage.NewInternalErrorf("key %v, object encode error %v", key, err.Error())
-			// 	}
-			// 	rawObjField := table.freezerTag[jsonTagRawObj].structField
-			// 	obj.FieldByName(rawObjField).SetBytes(data)
-
-			// 	upMap := table.ObjMapField(obj, nil, true)
-			// 	dbhandler = dbhandler.Updates(upMap)
-			// } else {
-			// 	for _, v := range fields {
-			// 		update[v] = obj.FieldByName(v).Interface()
-			// 	}
-			// 	dbhandler = dbhandler.Updates(update)
-			// }
-			return nil
-		})
-		if err != nil {
-			return storage.NewInternalErrorf("key %s error:%v", key, err.Error())
-		}
-
-		err = dbhandler.Error
-		if err != nil {
-			return storage.NewInternalErrorf("key %s error:%v", key, err.Error())
-		}
-		return s.GetResourceWithKey(ctx, key, out, false)
+	newData := &dataModel{
+		Name: resource,
+	}
+	newData.Obj, err = runtime.Encode(s.codec, ret)
+	if err != nil {
+		return storage.NewInternalErrorf("key %v, object encode error %v", key, err.Error())
 	}
 
-	glog.V(9).Infof("Create obj for update method, obj: %+v\r\n", ret)
+	//data not change do nothing
+	if bytes.Equal(newData.Obj, oriData.Obj) {
+		return decode(s.codec, s.versioner, oriData.Obj, out, 0)
+	}
 
-	return s.Create(ctx, key, ret, out, 0)
+	updateOutData := &dataModel{}
+	if err := dbhandle.
+		Assign(map[string]interface{}{"name": newData.Name, "namespace": newData.Namespace, "obj": newData.Obj}).
+		FirstOrCreate(updateOutData).Error; err != nil {
+		return storage.NewInternalErrorf("key %v, object encode error %v", key, err.Error())
+	}
 
+	return decode(s.codec, s.versioner, updateOutData.Obj, out, 0)
 }
 
-func (s *store) doQuery(ctx context.Context, key string, objPtr runtime.Object, p storage.SelectionPredicate) ([]*RowResult, *Table, error) {
+func (s *store) GetToList(ctx context.Context, key string, resourceVersion string, pred storage.SelectionPredicate, listObj runtime.Object) error {
 
-	table := s.table(ctx, objPtr)
-
-	//get count
-	var count uint64
-	err := s.GetCount(key, table, p, &count)
+	listPtr, err := meta.GetItemsPtr(listObj)
 	if err != nil {
-		return nil, nil, err
+		return err
 	}
-	if count == 0 {
-		return nil, table, nil
+	v, err := conversion.EnforcePtr(listPtr)
+	if err != nil || v.Kind() != reflect.Slice {
+		panic("need ptr to slice")
 	}
 
-	dbHandle := s.client.Table(table.name).Model(table.obj.Type())
-	selectionField := []string{queryAllField}
-	dbHandle = table.BaseCondition(dbHandle, p, selectionField)
-	dbHandle = table.PageCondition(dbHandle, p, count)
+	kind, _ := extractKey(key)
+	if len(kind) == 0 {
+		return storage.NewKeyNotFoundError(key, 0)
+	}
 
-	rows, err := dbHandle.Rows()
+	glog.Infof("Call GetToList key %v pred %v", key, pred)
+
+	data := []dataModel{}
+	dbHandle := s.client.Table(kind)
+	dbHandle = selectionWithFields(dbHandle, pred, true)
+	if err := dbHandle.Limit(1).Find(&data).Error; err != nil {
+		return storage.NewInternalErrorf(key, err.Error())
+	}
+
+	if len(data) > 0 {
+		if err := appendListItem(v, data[0].Obj, uint64(0), pred, s.codec, s.versioner); err != nil {
+			return err
+		}
+	}
+
+	// update version with cluster level revision
+	return s.versioner.UpdateList(listObj, uint64(0), "")
+}
+
+type continueToken struct {
+	Start uint64 `json:"start"`
+}
+
+// parseFrom transforms an encoded predicate from into a versioned struct.
+// TODO: return a typed error that instructs clients that they must relist
+func decodeContinue(continueValue string) (skip uint64, err error) {
+	data, err := base64.RawURLEncoding.DecodeString(continueValue)
 	if err != nil {
-		return nil, nil, storage.NewInternalErrorf("key %s error:%v", key, err.Error())
+		return 0, fmt.Errorf("continue key is not valid: %v", err)
 	}
-	defer rows.Close()
+	var c continueToken
+	if err := json.Unmarshal(data, &c); err != nil {
+		return 0, fmt.Errorf("continue key is not valid: %v", err)
+	}
 
-	cloneObj, err := CloneRuntimeObj(objPtr)
+	return c.Start, nil
+}
+
+// encodeContinue returns a string representing the encoded continuation of the current query.
+func encodeContinue(start uint64, resourceVersion int64) (string, error) {
+	out, err := json.Marshal(&continueToken{Start: start})
 	if err != nil {
-		return nil, nil, storage.NewInternalErrorf("key %s error: %v", key, err.Error())
+		return "", err
 	}
+	return base64.RawURLEncoding.EncodeToString(out), nil
+}
 
-	// s.versioner.UpdateTypeMeta(cloneObj, GetObjKind(cloneObj), s.storageVersion)
-
-	rowList, err := ScanRows(rows, table, cloneObj)
+func (s *store) List(ctx context.Context, key string, resourceVersion string, pred storage.SelectionPredicate, listObj runtime.Object) error {
+	listPtr, err := meta.GetItemsPtr(listObj)
 	if err != nil {
-		return nil, nil, storage.NewInternalErrorf("key %s error:%v", key, err.Error())
+		return err
 	}
-	return rowList, table, err
+	v, err := conversion.EnforcePtr(listPtr)
+	if err != nil || v.Kind() != reflect.Slice {
+		panic("need ptr to slice")
+	}
+
+	glog.Infof("Call List key %v pred %v", key, pred)
+	kind, _ := extractKey(key)
+	if len(kind) == 0 {
+		return storage.NewKeyNotFoundError(key, 0)
+	}
+
+	dbHandle := s.client.Table(kind)
+
+	// set the appropriate clientv3 options to filter the returned data set
+	if pred.Limit > 0 {
+		dbHandle.Limit(pred.Limit)
+	}
+
+	var skip uint64
+	var hasMore bool
+	var nextSkip uint64
+	switch {
+	case len(pred.Continue) > 0:
+		//continue
+		skip, err = decodeContinue(pred.Continue)
+		if err != nil {
+			return apierrors.NewBadRequest(fmt.Sprintf("invalid continue token: %v", err))
+		}
+	case pred.Limit > 0:
+		//first resource
+	default:
+		return apierrors.NewBadRequest(fmt.Sprintf("invalid request without limit with list and mysql storage"))
+	}
+
+	//first get list count by selection
+	var listCount uint64
+	dbHandle = selectionWithFields(dbHandle, pred, true)
+	dbHandle = dbHandle.Order("id")
+	if skip > 0 {
+		dbHandle = dbHandle.Offset(skip)
+	}
+	err = dbHandle.Count(&listCount).Error
+	if err != nil {
+		return storage.NewInternalErrorf("key %v, query count error %v", key, err)
+	}
+	if uint64(pred.Limit) >= listCount {
+		hasMore = false
+	} else {
+		hasMore = true
+		nextSkip = skip + uint64(pred.Limit)
+	}
+	growSlice(v, 2048, int(pred.Limit))
+
+	data := []dataModel{}
+	if err := dbHandle.Find(&data).Error; err != nil {
+		return storage.NewInternalErrorf(key, err.Error())
+	}
+
+	for _, dataVal := range data {
+		if err := appendListItem(v, dataVal.Obj, uint64(0), pred, s.codec, s.versioner); err != nil {
+			return err
+		}
+	}
+
+	// instruct the client to begin querying from immediately after the last key we returned
+	// we never return a key that the client wouldn't be allowed to see
+	if hasMore {
+		// we want to start immediately after the last key
+		next, err := encodeContinue(nextSkip, 0)
+		if err != nil {
+			return storage.NewInternalErrorf(key, err.Error())
+		}
+		return s.versioner.UpdateList(listObj, uint64(0), next)
+	}
+
+	// no continuation
+	return s.versioner.UpdateList(listObj, uint64(0), "")
+}
+
+// growSlice takes a slice value and grows its capacity up
+// to the maximum of the passed sizes or maxCapacity, whichever
+// is smaller. Above maxCapacity decisions about allocation are left
+// to the Go runtime on append. This allows a caller to make an
+// educated guess about the potential size of the total list while
+// still avoiding overly aggressive initial allocation. If sizes
+// is empty maxCapacity will be used as the size to grow.
+func growSlice(v reflect.Value, maxCapacity int, sizes ...int) {
+	cap := v.Cap()
+	max := cap
+	for _, size := range sizes {
+		if size > max {
+			max = size
+		}
+	}
+	if len(sizes) == 0 || max > maxCapacity {
+		max = maxCapacity
+	}
+	if max <= cap {
+		return
+	}
+	if v.Len() > 0 {
+		extra := reflect.MakeSlice(v.Type(), 0, max)
+		reflect.Copy(extra, v)
+		v.Set(extra)
+	} else {
+		extra := reflect.MakeSlice(v.Type(), 0, max)
+		v.Set(extra)
+	}
 }
 
 func (s *store) userUpdate(input runtime.Object, userUpdate storage.UpdateFunc) (runtime.Object, uint64, error) {
@@ -300,35 +447,28 @@ func (s *store) userUpdate(input runtime.Object, userUpdate storage.UpdateFunc) 
 
 // decode decodes value of bytes into object. It will also set the object resource version to rev.
 // On success, objPtr would be set to the object.
-func decode(codec runtime.Codec, versioner storage.Versioner, elem *RowResult, objPtr runtime.Object) error {
+func decode(codec runtime.Codec, versioner storage.Versioner, value []byte, objPtr runtime.Object, rev int64) error {
 	if _, err := conversion.EnforcePtr(objPtr); err != nil {
 		panic("unable to convert output object to pointer")
 	}
-	_, _, err := codec.Decode(elem.data, nil, objPtr)
+	_, _, err := codec.Decode(value, nil, objPtr)
 	if err != nil {
 		return err
 	}
 	// being unable to set the version does not prevent the object from being extracted
-	versioner.UpdateObject(objPtr, uint64(resourceVersion))
-	UpdateNameWithResouceKey(objPtr, elem.resourceKey)
+	versioner.UpdateObject(objPtr, uint64(rev))
 	return nil
 }
 
-// decodeList decodes a list of values into a list of objects
-// On success, ListPtr would be set to the list of objects.
-func decodeList(elems []*RowResult, ListPtr interface{}, codec runtime.Codec, versioner storage.Versioner) error {
-	v, err := conversion.EnforcePtr(ListPtr)
-	if err != nil || v.Kind() != reflect.Slice {
-		panic("need ptr to slice")
+// appendListItem decodes and appends the object (if it passes filter) to v, which must be a slice.
+func appendListItem(v reflect.Value, data []byte, rev uint64, pred storage.SelectionPredicate, codec runtime.Codec, versioner storage.Versioner) error {
+	obj, _, err := codec.Decode(data, nil, reflect.New(v.Type().Elem()).Interface().(runtime.Object))
+	if err != nil {
+		return err
 	}
-	for _, elem := range elems {
-		obj, _, err := codec.Decode(elem.data, nil, reflect.New(v.Type().Elem()).Interface().(runtime.Object))
-		if err != nil {
-			return err
-		}
-		// being unable to set the version does not prevent the object from being extracted
-		versioner.UpdateObject(obj, resourceVersion)
-		UpdateNameWithResouceKey(obj, elem.resourceKey)
+	// being unable to set the version does not prevent the object from being extracted
+	versioner.UpdateObject(obj, rev)
+	if matched, err := pred.Matches(obj); err == nil && matched {
 		v.Set(reflect.Append(v, reflect.ValueOf(obj).Elem()))
 	}
 	return nil
@@ -336,68 +476,38 @@ func decodeList(elems []*RowResult, ListPtr interface{}, codec runtime.Codec, ve
 
 //Count interface count
 func (s *store) Count(key string) (int64, error) {
+	kind, _ := extractKey(key)
+	if len(kind) == 0 {
+		return 0, storage.NewKeyNotFoundError(key, 0)
+	}
+	glog.Infof("call count with key %v kind %v", key, kind)
 
 	var count uint64
-	err := s.GetCount(key, nil, storage.Everything, &count)
-	return int64(count), err
-}
 
-//filter support query arg
-func (s *store) GetCount(key string, table *Table, p storage.SelectionPredicate, result *uint64) error {
-
-	dbHandle := s.client.Table(table.name).Model(table.obj.Type())
-
-	selectionField := []string{queryCount}
-	dbHandle = table.BaseCondition(dbHandle, p, selectionField)
-	err := dbHandle.Count(result).Error
+	err := s.client.Table(kind).Count(&count).Error
 	if err != nil {
-		return storage.NewInternalErrorf("key %v, query count error %v", key, err)
+		return 0, storage.NewInternalErrorf("key %v, query count error %v", key, err)
 	}
 
-	return nil
+	return int64(count), nil
 }
 
-//GetResourceWithKey build a sql request with key
-func (s *store) GetResourceWithKey(ctx context.Context, key string, out runtime.Object, ignoreNotFound bool) error {
+func (s *store) Watch(ctx context.Context, key string, resourceVersion string, p storage.SelectionPredicate) (watch.Interface, error) {
+	return nil, storage.NewInternalError(fmt.Sprintf("the backend of mysql not support watch"))
+}
 
-	table := s.table(ctx, out)
+func (s *store) WatchList(ctx context.Context, key string, resourceVersion string, p storage.SelectionPredicate) (watch.Interface, error) {
+	return nil, storage.NewInternalError(fmt.Sprintf("the backend of mysql not support watch"))
+}
 
-	glog.V(9).Infof("Get resource with key %s", key)
-
-	p := storage.SelectionPredicate{}
-	resourceField := table.columnToFreezerTagKey[table.resoucekey]
-	p.Field = fields.SelectorFromSet(map[string]string{resourceField: GetActualResourceKey(key)})
-
-	rowList, _, err := s.doQuery(ctx, key, out, p)
+func (s *store) updateObj(obj runtime.Object, userUpdate storage.UpdateFunc) (runtime.Object, uint64, error) {
+	ret, _, err := userUpdate(obj, storage.ResponseMeta{})
 	if err != nil {
-		return storage.NewUnreachableError(key, resourceVersion)
+		return nil, 0, err
 	}
 
-	if len(rowList) == 0 {
-		if ignoreNotFound {
-			return runtime.SetZeroValue(out)
-		}
-		return storage.NewKeyNotFoundError(key, resourceVersion)
-	} else if len(rowList) > 1 {
-		panic(fmt.Sprintf("resource key(%s) must to be unique", key))
+	if err := s.versioner.PrepareObjectForStorage(ret); err != nil {
+		return nil, 0, fmt.Errorf("PrepareObjectForStorage failed: %v", err)
 	}
-
-	if err := decode(s.codec, s.versioner, rowList[0], out); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (s *store) table(ctx context.Context, obj runtime.Object) *Table {
-	ctxTable, ok := ctx.Value(tablecontextKey).(*Table)
-	if !ok {
-		table, err := GetTable(ctx, obj)
-		if err != nil {
-			panic(fmt.Sprintf("struct must to be as a table. error(%v).", err))
-		}
-		return table
-	}
-
-	return ctxTable
+	return ret, 0, nil
 }

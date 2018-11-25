@@ -1,13 +1,3 @@
-/*
-
-Copyright 2018 This Project Authors.
-
-Author:  seanchann <seanchann@foxmail.com>
-
-See docs/ for more information about the  project.
-
-*/
-
 package mysql
 
 import (
@@ -19,12 +9,9 @@ import (
 
 	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/util/cache"
-	"k8s.io/apiserver/pkg/storage"
 
 	"github.com/golang/glog"
-	"github.com/jinzhu/gorm"
 )
 
 const (
@@ -96,6 +83,11 @@ type Table struct {
 	//resourcekey hold a column name,this key as a resouce name in restful url
 	//will use this filed value for metadata.name field
 	resoucekey string
+}
+
+type RowResult struct {
+	data        []byte
+	resourceKey string
 }
 
 const (
@@ -423,134 +415,4 @@ func (t *Table) ConvertFieldsValue(value string) (sqlValue string) {
 	}
 
 	return
-}
-
-//appendQuoteToField append quote into filed for every member。
-// eg 'spec.test.name' ====> '"spec"."test"."name"'
-func appendQuoteToField(input string) (field string) {
-	members := strings.Split(input, ".")
-	if len(members) > 0 {
-		var quoteMember []string
-		for _, v := range members {
-			m := fmt.Sprintf("\"%s\"", v)
-			quoteMember = append(quoteMember, m)
-		}
-		field = strings.Join(quoteMember, ".")
-	}
-
-	return
-}
-
-//Fields build gorm select condition by storage.SelectionPredicate
-//selectionFeild contains what field will be select for query
-func (t *Table) Fields(dbHandle *gorm.DB, p storage.SelectionPredicate, selectionFeild []string) *gorm.DB {
-	if p.Field == nil || (p.Field != nil && p.Field.Empty()) {
-		return dbHandle
-	}
-
-	selectAllField := false
-	selectCountField := false
-	for _, v := range selectionFeild {
-		if strings.Compare(v, queryAllField) == 0 {
-			selectAllField = true
-		} else if strings.Compare(v, queryCount) == 0 {
-			selectCountField = true
-		}
-	}
-	_ = selectAllField
-
-	fieldsCondition := p.Field.Requirements()
-	for _, v := range fieldsCondition {
-		column := t.GetColumnByField(v.Field)
-		switch v.Operator {
-		case selection.Equals:
-			fallthrough
-		case selection.DoubleEquals:
-			if column == "" {
-				query := fmt.Sprintf("JSON_CONTAINS(%s, '%s', '$.%s') = ?",
-					t.freezerTag[jsonTagRawObj].column, v.Value, appendQuoteToField(v.Field))
-				queryArgs := "1"
-
-				dbHandle = dbHandle.Where(query, queryArgs)
-			} else {
-				query := fmt.Sprintf("%s = ?", column)
-				queryArgs := t.ConvertFieldsValue(v.Value)
-				dbHandle = dbHandle.Where(query, queryArgs)
-			}
-		case selection.NotEquals:
-			if column == "" {
-				query := fmt.Sprintf("JSON_CONTAINS(%s, '%s', '$.%s') = ?",
-					t.freezerTag[jsonTagRawObj].column, v.Value, appendQuoteToField(v.Field))
-				queryArgs := "0"
-
-				dbHandle = dbHandle.Where(query, queryArgs)
-			} else {
-				query := fmt.Sprintf("%s != ?", column)
-				queryArgs := t.ConvertFieldsValue(v.Value)
-				dbHandle = dbHandle.Where(query, queryArgs)
-			}
-
-		//TODO: this can't be support if have specific Requirements
-		case selection.In:
-			fallthrough
-		case selection.NotIn:
-			glog.Warningf("strange operator. check value in field in talbe(%v)", t.name)
-		case selection.DoesNotExist:
-			fallthrough
-		case selection.Exists:
-			//only search rawobj filed for this operator
-			if selectCountField {
-				continue
-			}
-			if column == "" {
-				query := fmt.Sprintf("JSON_CONTAINS_PATH(%s, 'one', '$.%s') = ?",
-					t.freezerTag[jsonTagRawObj].column, appendQuoteToField(v.Field))
-				queryArgs := "1"
-				if selection.DoesNotExist == v.Operator {
-					queryArgs = "0"
-				}
-
-				dbHandle = dbHandle.Where(query, queryArgs)
-			}
-		}
-	}
-
-	return dbHandle
-}
-
-//BaseCondition build select condition
-func (t *Table) BaseCondition(dbHandle *gorm.DB, p storage.SelectionPredicate, selectionFeild []string) *gorm.DB {
-	dbHandle = t.Fields(dbHandle, p, selectionFeild)
-	dbHandle = dbHandle.Order(t.resoucekey)
-
-	return dbHandle
-}
-
-//PageCondition build gorm selection by PageCondition
-func (t *Table) PageCondition(dbHandle *gorm.DB, p storage.SelectionPredicate, totalCount uint64) *gorm.DB {
-
-	// hasPage, perPage, skip := p.BuildPagerCondition(uint64(totalCount))
-	// if hasPage {
-	// 	limitVal := perPage
-	// 	if limitVal != 0 {
-	// 		dbHandle = dbHandle.Limit(int(limitVal))
-	// 	}
-
-	// 	skipVal := skip
-	// 	if skipVal != 0 {
-	// 		dbHandle = dbHandle.Offset(int(skipVal))
-	// 	}
-	// }
-
-	limitVal := p.Limit
-	if limitVal != 0 {
-		dbHandle = dbHandle.Limit(int(limitVal))
-	}
-
-	// skipVal := skip
-	// if skipVal != 0 {
-	// 	dbHandle = dbHandle.Offset(int(skipVal))
-	// }
-
-	return dbHandle
 }

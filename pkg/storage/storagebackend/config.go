@@ -99,6 +99,7 @@ type AWSDynamoDBConfig struct {
 type MysqlConfig struct {
 	// ServerList is the list of storage servers to connect with.
 	ServerList []string
+	Debug bool
 }
 
 func NewDefaultConfig(prefix string, codec runtime.Codec) *Config {
