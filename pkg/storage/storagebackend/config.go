@@ -99,7 +99,9 @@ type AWSDynamoDBConfig struct {
 type MysqlConfig struct {
 	// ServerList is the list of storage servers to connect with.
 	ServerList []string
-	Debug bool
+	Debug      bool
+	//ListDefaultLimit limit list default value
+	ListDefaultLimit int
 }
 
 func NewDefaultConfig(prefix string, codec runtime.Codec) *Config {
@@ -108,8 +110,8 @@ func NewDefaultConfig(prefix string, codec runtime.Codec) *Config {
 		// Default cache size to 0 - if unset, its size will be set based on target
 		// memory usage.
 		DeserializationCacheSize: 0,
-		Codec:              codec,
-		CompactionInterval: DefaultCompactInterval,
-		Quorum:             true,
+		Codec:                    codec,
+		CompactionInterval:       DefaultCompactInterval,
+		Quorum:                   true,
 	}
 }

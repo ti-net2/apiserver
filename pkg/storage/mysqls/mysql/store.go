@@ -40,10 +40,11 @@ const (
 )
 
 type store struct {
-	client         *dbmysql.DB
-	codec          runtime.Codec
-	versioner      storage.Versioner
-	storageVersion string
+	client           *dbmysql.DB
+	codec            runtime.Codec
+	versioner        storage.Versioner
+	storageVersion   string
+	listDefaultLimit int
 }
 
 //dataModel
@@ -56,24 +57,28 @@ type dataModel struct {
 }
 
 //New create a mysql store
-func New(client *dbmysql.DB, codec runtime.Codec, version string) storage.Interface {
-	return newStore(client, codec, version)
+func New(client *dbmysql.DB, codec runtime.Codec, version string, defaultLimit int) storage.Interface {
+	return newStore(client, codec, version, defaultLimit)
 }
 
 const (
 	tablecontextKey = iota
 )
 
-func newStore(client *dbmysql.DB, codec runtime.Codec, version string) *store {
+func newStore(client *dbmysql.DB, codec runtime.Codec, version string, defaultLimit int) *store {
 	versioner := mysqls.APIObjectVersioner{}
 	if len(version) == 0 {
 		glog.Fatalln("need give a storage version for mysql backend")
 	}
+	if defaultLimit <= 0 {
+		defaultLimit = 1000
+	}
 	return &store{
-		client:         client,
-		codec:          codec,
-		versioner:      versioner,
-		storageVersion: version,
+		client:           client,
+		codec:            codec,
+		versioner:        versioner,
+		storageVersion:   version,
+		listDefaultLimit: defaultLimit,
 	}
 }
 
@@ -87,17 +92,22 @@ func (s *store) Versioner() storage.Versioner {
 }
 
 func (s *store) Get(ctx context.Context, key string, resourceVersion string, out runtime.Object, ignoreNotFound bool) error {
-	kind, resource := extractKey(key)
+	reqMeta := extractKey(ctx, key)
+	kind := reqMeta.Kind
+	resource := reqMeta.Resource
 	if len(kind) == 0 || len(resource) == 0 {
 		return storage.NewKeyNotFoundError(key, 0)
 	}
 
-	//query := fmt.Sprintf("name = ? AND namespace = ")
-	query := fmt.Sprintf("name = ?")
-	queryArgsName := resource
+	query := fmt.Sprintf("name = ? ")
+	queryArgs := []interface{}{resource}
+	if len(reqMeta.Namespace) != 0 {
+		query = fmt.Sprintf("name = ? AND namespace = ? ")
+		queryArgs = []interface{}{resource, reqMeta.Namespace}
+	}
 
 	outData := &dataModel{}
-	err := s.client.Table(kind).Where(query, queryArgsName).Limit(1).Find(outData).Error
+	err := s.client.Table(kind).Where(query, queryArgs...).Limit(1).Find(outData).Error
 	if err != nil {
 		if dbmysql.IsRecordNotFoundError(err) {
 			if ignoreNotFound {
@@ -118,7 +128,10 @@ func (s *store) Create(ctx context.Context, key string, obj, out runtime.Object,
 		return fmt.Errorf("PrepareObjectForStorage failed: %v", err)
 	}
 
-	kind, resource := extractKey(key)
+	reqMeta := extractKey(ctx, key)
+	kind := reqMeta.Kind
+	resource := reqMeta.Resource
+
 	if len(kind) == 0 || len(resource) == 0 {
 		return storage.NewKeyNotFoundError(key, 0)
 	}
@@ -130,7 +143,8 @@ func (s *store) Create(ctx context.Context, key string, obj, out runtime.Object,
 	}
 
 	data := &dataModel{
-		Name: resource,
+		Name:      resource,
+		Namespace: reqMeta.Namespace,
 	}
 	var err error
 	data.Obj, err = runtime.Encode(s.codec, obj)
@@ -153,20 +167,36 @@ func (s *store) Delete(ctx context.Context, key string, out runtime.Object, prec
 		panic("unable to convert output object to pointer")
 	}
 
-	kind, resource := extractKey(key)
+	reqMeta := extractKey(ctx, key)
+	kind := reqMeta.Kind
+	resource := reqMeta.Resource
 	if len(kind) == 0 || len(resource) == 0 {
 		return storage.NewKeyNotFoundError(key, 0)
 	}
 
-	if err := s.Get(ctx, key, "", out, false); err != nil {
+	query := fmt.Sprintf("name = ? ")
+	queryArgs := []interface{}{resource}
+	if len(reqMeta.Namespace) != 0 {
+		query = fmt.Sprintf("name = ? AND namespace = ? ")
+		queryArgs = []interface{}{resource, reqMeta.Namespace}
+	}
+
+	outData := &dataModel{}
+	err = s.client.Table(kind).Where(query, queryArgs...).Limit(1).Find(outData).Error
+	if err != nil {
+		if dbmysql.IsRecordNotFoundError(err) {
+			return storage.NewKeyNotFoundError(key, 0)
+		}
 		return storage.NewInternalErrorf(key, err.Error())
 	}
 
-	//query := fmt.Sprintf("name = ? AND namespace = ")
-	query := fmt.Sprintf("name = ?")
-	queryArgsName := resource
+	if err := decode(s.codec, s.versioner, outData.Obj, out, outData.Revision); err != nil {
+		return storage.NewInternalErrorf(key, err.Error())
+	}
 
-	err = s.client.Table(kind).Where(query, queryArgsName).Delete(dataModel{}).Error
+	query = fmt.Sprintf("id = ? ")
+	queryArgs = []interface{}{outData.ID}
+	err = s.client.Table(kind).Where(query, queryArgs...).Delete(dataModel{}).Error
 	if err != nil {
 		return storage.NewInternalErrorf(key, err.Error())
 	}
@@ -186,7 +216,9 @@ func (s *store) GuaranteedUpdate(
 		panic("unable to convert output object to pointer")
 	}
 
-	kind, resource := extractKey(key)
+	reqMeta := extractKey(ctx, key)
+	kind := reqMeta.Kind
+	resource := reqMeta.Resource
 	if len(kind) == 0 || len(resource) == 0 {
 		return storage.NewKeyNotFoundError(key, 0)
 	}
@@ -197,12 +229,15 @@ func (s *store) GuaranteedUpdate(
 		}
 	}
 
-	//query := fmt.Sprintf("name = ? AND namespace = ")
-	query := fmt.Sprintf("name = ?")
-	queryArgsName := resource
+	query := fmt.Sprintf("name = ? ")
+	queryArgs := []interface{}{resource}
+	if len(reqMeta.Namespace) != 0 {
+		query = fmt.Sprintf("name = ? AND namespace = ? ")
+		queryArgs = []interface{}{resource, reqMeta.Namespace}
+	}
 
 	oriData := &dataModel{}
-	dbhandle := s.client.Table(kind).Where(query, queryArgsName)
+	dbhandle := s.client.Table(kind).Where(query, queryArgs...)
 	err = dbhandle.Limit(1).Find(oriData).Error
 	if err != nil {
 		if dbmysql.IsRecordNotFoundError(err) {
@@ -261,12 +296,13 @@ func (s *store) GetToList(ctx context.Context, key string, resourceVersion strin
 		panic("need ptr to slice")
 	}
 
-	kind, _ := extractKey(key)
+	resMeta := extractKey(ctx, key)
+	kind := resMeta.Kind
 	if len(kind) == 0 {
 		return storage.NewKeyNotFoundError(key, 0)
 	}
 
-	glog.Infof("Call GetToList key %v pred %v", key, pred)
+	glog.Infof("Call GetToList key %v pred %v ctx %v", key, pred, ctx)
 
 	data := []dataModel{}
 	dbHandle := s.client.Table(kind)
@@ -323,22 +359,18 @@ func (s *store) List(ctx context.Context, key string, resourceVersion string, pr
 		panic("need ptr to slice")
 	}
 
-	glog.Infof("Call List key %v pred %v", key, pred)
-	kind, _ := extractKey(key)
+	resMeta := extractKey(ctx, key)
+	kind := resMeta.Kind
 	if len(kind) == 0 {
 		return storage.NewKeyNotFoundError(key, 0)
 	}
 
 	dbHandle := s.client.Table(kind)
 
-	// set the appropriate clientv3 options to filter the returned data set
-	if pred.Limit > 0 {
-		dbHandle.Limit(pred.Limit)
-	}
-
 	var skip uint64
 	var hasMore bool
 	var nextSkip uint64
+	var limit uint64
 	switch {
 	case len(pred.Continue) > 0:
 		//continue
@@ -348,8 +380,14 @@ func (s *store) List(ctx context.Context, key string, resourceVersion string, pr
 		}
 	case pred.Limit > 0:
 		//first resource
+		limit = uint64(pred.Limit)
 	default:
-		return apierrors.NewBadRequest(fmt.Sprintf("invalid request without limit with list and mysql storage"))
+		limit = uint64(s.listDefaultLimit)
+	}
+
+	// set the appropriate clientv3 options to filter the returned data set
+	if limit > 0 {
+		dbHandle = dbHandle.Limit(limit)
 	}
 
 	//first get list count by selection
@@ -363,13 +401,13 @@ func (s *store) List(ctx context.Context, key string, resourceVersion string, pr
 	if err != nil {
 		return storage.NewInternalErrorf("key %v, query count error %v", key, err)
 	}
-	if uint64(pred.Limit) >= listCount {
+	if uint64(limit) >= listCount {
 		hasMore = false
 	} else {
 		hasMore = true
-		nextSkip = skip + uint64(pred.Limit)
+		nextSkip = skip + uint64(limit)
 	}
-	growSlice(v, 2048, int(pred.Limit))
+	growSlice(v, 2048, int(limit))
 
 	data := []dataModel{}
 	if err := dbHandle.Find(&data).Error; err != nil {
@@ -476,7 +514,8 @@ func appendListItem(v reflect.Value, data []byte, rev uint64, pred storage.Selec
 
 //Count interface count
 func (s *store) Count(key string) (int64, error) {
-	kind, _ := extractKey(key)
+	resMeta := extractKey(nil, key)
+	kind := resMeta.Kind
 	if len(kind) == 0 {
 		return 0, storage.NewKeyNotFoundError(key, 0)
 	}

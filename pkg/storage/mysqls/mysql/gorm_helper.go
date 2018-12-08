@@ -11,6 +11,7 @@ See docs/ for more information about the  project.
 package mysql
 
 import (
+	"context"
 	"fmt"
 
 	"strings"
@@ -87,16 +88,28 @@ func selectionWithFields(dbHandle *gorm.DB, p storage.SelectionPredicate, isCoun
 	return dbHandle
 }
 
-func extractKey(key string) (kind, resource string) {
+type requestMeta struct {
+	Namespace string
+	Kind      string
+	Resource  string
+}
+
+func extractKey(ctx context.Context, key string) *requestMeta {
+	reqMeta := &requestMeta{}
+
 	keySlice := strings.Split(key, "/")
-	if len(keySlice) == 3 {
-		resource = keySlice[2]
-		kind = keySlice[1]
+	if len(keySlice) == 4 {
+		reqMeta.Kind = keySlice[1]
+		reqMeta.Namespace = keySlice[2]
+		reqMeta.Resource = keySlice[3]
+	} else if len(keySlice) == 3 {
+		reqMeta.Kind = keySlice[1]
+		reqMeta.Resource = keySlice[2]
 	} else if len(keySlice) == 2 {
-		kind = keySlice[1]
+		reqMeta.Kind = keySlice[1]
 	}
 
-	glog.Infof("extract key %v slice %v:[%v]", key, len(keySlice), keySlice)
+	glog.V(4).Infof("extract key %v out reqmeta %#v", key, reqMeta)
 
-	return
+	return reqMeta
 }

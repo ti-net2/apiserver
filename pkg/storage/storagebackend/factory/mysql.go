@@ -44,7 +44,6 @@ func newMysqlClient(connectionStr string, debug bool) (*dbmysql.DB, error) {
 		db = db.Debug()
 	}
 
-
 	return db, db.DB().Ping()
 }
 
@@ -60,5 +59,5 @@ func newMysqlStorage(c storagebackend.Config) (storage.Interface, DestroyFunc, e
 		client.Close()
 	}
 
-	return mysql.New(client, c.Codec, "v1"), destroyFunc, nil
+	return mysql.New(client, c.Codec, "v1", c.Mysql.ListDefaultLimit), destroyFunc, nil
 }
