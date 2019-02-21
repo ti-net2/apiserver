@@ -1,6 +1,7 @@
 package factory
 
 import (
+	"fmt"
 	"strings"
 
 	"k8s.io/apiserver/pkg/storage"
@@ -32,7 +33,8 @@ func newMysqlClient(connectionStr string, debug bool) (*dbmysql.DB, error) {
 			return nil, err
 		}
 
-		if err = tmpDB.Exec("CREATE DATABASE " + databaseName).Error; err != nil {
+		createDBSQL := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s DEFAULT CHARACTER SET = 'utf8' DEFAULT COLLATE 'utf8_general_ci'", databaseName)
+		if err = tmpDB.Exec(createDBSQL).Error; err != nil {
 			return nil, err
 		}
 		db, err = dbmysql.Open(string("mysql"), connStr)

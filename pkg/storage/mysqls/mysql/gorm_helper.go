@@ -52,13 +52,13 @@ func selectionWithFields(dbHandle *gorm.DB, p storage.SelectionPredicate, isCoun
 		case selection.Equals:
 			fallthrough
 		case selection.DoubleEquals:
-			query := fmt.Sprintf("JSON_CONTAINS(%s, '%s', '$.%s') = ?",
+			query := fmt.Sprintf("JSON_CONTAINS(%s, '\"%s\"', '$.%s') = ?",
 				"obj", v.Value, appendQuoteToField(v.Field))
 			queryArgs := "1"
 
 			dbHandle = dbHandle.Where(query, queryArgs)
 		case selection.NotEquals:
-			query := fmt.Sprintf("JSON_CONTAINS(%s, '%s', '$.%s') = ?",
+			query := fmt.Sprintf("JSON_CONTAINS(%s, '\"%s\"', '$.%s') = ?",
 				"obj", v.Value, appendQuoteToField(v.Field))
 			queryArgs := "0"
 

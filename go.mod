@@ -7,6 +7,7 @@ require (
 	github.com/NYTimes/gziphandler v0.0.0-20170623195520-56545f4a5d46 // indirect
 	github.com/PuerkitoBio/purell v1.0.0 // indirect
 	github.com/PuerkitoBio/urlesc v0.0.0-20160726150825-5bd2802263f2 // indirect
+	github.com/Sirupsen/logrus v1.2.0 // indirect
 	github.com/aws/aws-sdk-go v1.15.73
 	github.com/beorn7/perks v0.0.0-20160229213445-3ac7bf7a47d1 // indirect
 	github.com/cockroachdb/cmux v0.0.0-20160228191917-112f0506e774 // indirect
@@ -16,10 +17,9 @@ require (
 	github.com/coreos/go-semver v0.0.0-20150304020126-568e959cd898 // indirect
 	github.com/coreos/go-systemd v0.0.0-20161114122254-48702e0da86b
 	github.com/coreos/pkg v0.0.0-20160620232715-fa29b1d70f0b
-	github.com/davecgh/go-spew v0.0.0-20170626231645-782f4967f2dc // indirect
 	github.com/denisenkom/go-mssqldb v0.0.0-20181014144952-4e0d7dc8888f // indirect
 	github.com/dgrijalva/jwt-go v0.0.0-20160705203006-01aeca54ebda // indirect
-	github.com/docker/docker v0.0.0-20180612054059-a9fbbdc8dd87
+	github.com/docker/docker v1.13.1
 	github.com/elazarl/go-bindata-assetfs v0.0.0-20150624150248-3dcc96556217
 	github.com/emicklei/go-restful v0.0.0-20170410110728-ff4f55a20633
 	github.com/emicklei/go-restful-swagger12 v0.0.0-20170208215640-dcef7f557305
@@ -38,7 +38,6 @@ require (
 	github.com/google/go-cmp v0.2.0 // indirect
 	github.com/google/gofuzz v0.0.0-20161122191042-44d81051d367
 	github.com/googleapis/gnostic v0.0.0-20170729233727-0c5108395e2d
-	github.com/gotestyourself/gotestyourself v2.2.0+incompatible // indirect
 	github.com/gregjones/httpcache v0.0.0-20170728041850-787624de3eb7 // indirect
 	github.com/grpc-ecosystem/go-grpc-prometheus v0.0.0-20170330212424-2500245aa611
 	github.com/grpc-ecosystem/grpc-gateway v1.3.0 // indirect
@@ -61,16 +60,14 @@ require (
 	github.com/onsi/gomega v1.4.3 // indirect
 	github.com/pborman/uuid v0.0.0-20150603214016-ca53cad383ca
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
-	github.com/pkg/errors v0.8.0 // indirect
-	github.com/pmezard/go-difflib v0.0.0-20151028094244-d8ed2627bdf0 // indirect
 	github.com/pquerna/cachecontrol v0.0.0-20171018203845-0dec1b30a021 // indirect
 	github.com/prometheus/client_golang v0.0.0-20170531130054-e7e903064f5e
 	github.com/prometheus/client_model v0.0.0-20150212101744-fa8ad6fec335
 	github.com/prometheus/common v0.0.0-20170427095455-13ba4ddd0caa // indirect
 	github.com/prometheus/procfs v0.0.0-20170519190837-65c1f6f8f0fc // indirect
-	github.com/sirupsen/logrus v0.0.0-20170822132746-89742aefa4b2 // indirect
+	github.com/sirupsen/logrus v1.2.0 // indirect
 	github.com/spf13/pflag v1.0.1
-	github.com/stretchr/testify v0.0.0-20180319223459-c679ae2cc0cb
+	github.com/stretchr/testify v1.2.2
 	github.com/ugorji/go v0.0.0-20170107133203-ded73eae5db7 // indirect
 	github.com/xiang90/probing v0.0.0-20160813154853-07dd2e8dfe18 // indirect
 	golang.org/x/crypto v0.0.0-20181203042331-505ab145d0a9
@@ -82,19 +79,18 @@ require (
 	google.golang.org/appengine v1.3.0 // indirect
 	google.golang.org/genproto v0.0.0-20181202183823-bd91e49a0898 // indirect
 	google.golang.org/grpc v1.17.0
-	gopkg.in/airbrake/gobrake.v2 v2.0.9 // indirect
 	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect
-	gopkg.in/gemnasium/logrus-airbrake-hook.v2 v2.1.2 // indirect
 	gopkg.in/inf.v0 v0.9.0 // indirect
 	gopkg.in/mgo.v2 v2.0.0-20180705113604-9856a29383ce
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0-20150622162204-20b71e5b60d7
 	gopkg.in/square/go-jose.v2 v2.0.0-20180411045311-89060dee6a84
 	gopkg.in/yaml.v1 v1.0.0-20140924161607-9f9df34309c0 // indirect
 	gopkg.in/yaml.v2 v2.2.1
-	gotest.tools v2.2.0+incompatible // indirect
 	k8s.io/api v0.0.0-20180914000641-b9bd491cc8f2
 	k8s.io/apimachinery v0.0.0-20180913025736-6dd46049f395
 	k8s.io/client-go v0.0.0-20180906181913-173ad5fde8e4
 	k8s.io/kube-openapi v0.0.0-20180711000925-0cf8f7e6ed1d
 	k8s.io/utils v0.0.0-20180726175726-66066c83e385
 )
+
+replace github.com/Sirupsen/logrus => github.com/sirupsen/logrus v1.2.0

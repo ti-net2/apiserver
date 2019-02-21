@@ -56,6 +56,17 @@ type dataModel struct {
 	Obj       []byte `gorm:"column:obj;NOT NULL;size:10240"`
 }
 
+const tableSQL = `CREATE TABLE IF NOT EXISTS %s (
+  id bigint(20) NOT NULL AUTO_INCREMENT,
+  name varchar(255) DEFAULT NULL,
+  namespace varchar(255) DEFAULT NULL,
+	revision bigint(20) DEFAULT NULL,
+  obj json NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY resource_idx (name,namespace)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8
+`
+
 //New create a mysql store
 func New(client *dbmysql.DB, codec runtime.Codec, version string, defaultLimit int) storage.Interface {
 	return newStore(client, codec, version, defaultLimit)
@@ -73,6 +84,7 @@ func newStore(client *dbmysql.DB, codec runtime.Codec, version string, defaultLi
 	if defaultLimit <= 0 {
 		defaultLimit = 1000
 	}
+
 	return &store{
 		client:           client,
 		codec:            codec,
@@ -89,6 +101,11 @@ func (s *store) Type() string {
 // Versioner implements storage.Interface.Versioner.
 func (s *store) Versioner() storage.Versioner {
 	return s.versioner
+}
+
+func (s *store) createTable(table string) {
+	sql := fmt.Sprintf(tableSQL, table)
+	s.client.Exec(sql)
 }
 
 func (s *store) Get(ctx context.Context, key string, resourceVersion string, out runtime.Object, ignoreNotFound bool) error {
@@ -137,9 +154,10 @@ func (s *store) Create(ctx context.Context, key string, obj, out runtime.Object,
 	}
 
 	if !s.client.HasTable(kind) {
-		if err := s.client.Table(kind).CreateTable(&dataModel{}).Error; err != nil {
-			return storage.NewInternalErrorf(key, err.Error())
-		}
+		s.createTable(kind)
+		// if err := s.client.Table(kind).CreateTable(&dataModel{}).Error; err != nil {
+		// 	return storage.NewInternalErrorf(key, err.Error())
+		// }
 	}
 
 	data := &dataModel{
@@ -224,9 +242,10 @@ func (s *store) GuaranteedUpdate(
 	}
 
 	if !s.client.HasTable(kind) {
-		if err := s.client.Table(kind).CreateTable(&dataModel{}).Error; err != nil {
-			return storage.NewInternalErrorf(key, err.Error())
-		}
+		// if err := s.client.Table(kind).CreateTable(&dataModel{}).Error; err != nil {
+		// 	return storage.NewInternalErrorf(key, err.Error())
+		// }
+		s.createTable(kind)
 	}
 
 	query := fmt.Sprintf("name = ? ")
