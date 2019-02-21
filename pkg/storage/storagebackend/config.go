@@ -31,6 +31,7 @@ const (
 	StorageTypeMysql       = "mysql"
 	StorageTypeMongoDB     = "mongo"
 	StorageTypeAWSDynamodb = "awsdynamodb"
+	StorageTypeSqlite      = "sqlite"
 
 	DefaultCompactInterval = 5 * time.Minute
 )
@@ -77,6 +78,8 @@ type Config struct {
 	AWSDynamoDB AWSDynamoDBConfig
 	//mysql config
 	Mysql MysqlConfig
+	//Sqlite sqlite config
+	Sqlite SqliteConfig
 }
 
 type MongoExtendConfig struct {
@@ -99,6 +102,19 @@ type AWSDynamoDBConfig struct {
 type MysqlConfig struct {
 	// ServerList is the list of storage servers to connect with.
 	ServerList []string
+	Debug      bool
+	//ListDefaultLimit limit list default value
+	ListDefaultLimit int
+}
+
+//SqliteConfig sqlite config
+type SqliteConfig struct {
+	//DSN a dsn  that a sqlite database file with path.
+	//like file:test.db?cache=share&mode=memory we use https://github.com/mattn/go-sqlite3
+	DSN   string
+	Debug bool
+	//ListDefaultLimit limit list default value
+	ListDefaultLimit int
 }
 
 func NewDefaultConfig(prefix string, codec runtime.Codec) *Config {
@@ -107,8 +123,8 @@ func NewDefaultConfig(prefix string, codec runtime.Codec) *Config {
 		// Default cache size to 0 - if unset, its size will be set based on target
 		// memory usage.
 		DeserializationCacheSize: 0,
-		Codec:              codec,
-		CompactionInterval: DefaultCompactInterval,
-		Quorum:             true,
+		Codec:                    codec,
+		CompactionInterval:       DefaultCompactInterval,
+		Quorum:                   true,
 	}
 }

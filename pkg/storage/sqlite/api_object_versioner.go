@@ -8,7 +8,7 @@ See docs/ for more information about the  project.
 
 */
 
-package mysqls
+package sqlite
 
 import (
 	"strconv"

@@ -43,6 +43,8 @@ func Create(c storagebackend.Config) (storage.Interface, DestroyFunc, error) {
 		return newMongoStorage(c)
 	case storagebackend.StorageTypeAWSDynamodb:
 		return newDynamodbStorage(c)
+	case storagebackend.StorageTypeSqlite:
+		return newSqliteStorage(c)
 	default:
 		return nil, nil, fmt.Errorf("unknown storage type: %s", c.Type)
 	}
