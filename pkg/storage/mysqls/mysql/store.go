@@ -282,7 +282,8 @@ func (s *store) GuaranteedUpdate(
 	}
 
 	newData := &dataModel{
-		Name: resource,
+		Name:      resource,
+		Namespace: reqMeta.Namespace,
 	}
 	newData.Obj, err = runtime.Encode(s.codec, ret)
 	if err != nil {
@@ -378,8 +379,8 @@ func (s *store) List(ctx context.Context, key string, resourceVersion string, pr
 		panic("need ptr to slice")
 	}
 
-	resMeta := extractKey(ctx, key)
-	kind := resMeta.Kind
+	reqMeta := extracListKey(ctx, key)
+	kind := reqMeta.Kind
 	if len(kind) == 0 {
 		return storage.NewKeyNotFoundError(key, 0)
 	}
@@ -416,6 +417,14 @@ func (s *store) List(ctx context.Context, key string, resourceVersion string, pr
 	if skip > 0 {
 		dbHandle = dbHandle.Offset(skip)
 	}
+
+	//check namesapce
+	if len(reqMeta.Namespace) != 0 {
+		query := fmt.Sprintf("namespace = ?")
+		queryArgs := []interface{}{reqMeta.Namespace}
+		dbHandle = dbHandle.Where(query, queryArgs...)
+	}
+
 	err = dbHandle.Count(&listCount).Error
 	if err != nil {
 		return storage.NewInternalErrorf("key %v, query count error %v", key, err)

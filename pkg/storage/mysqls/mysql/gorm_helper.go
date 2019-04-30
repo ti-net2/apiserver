@@ -113,3 +113,19 @@ func extractKey(ctx context.Context, key string) *requestMeta {
 
 	return reqMeta
 }
+
+func extracListKey(ctx context.Context, key string) *requestMeta {
+	reqMeta := &requestMeta{}
+
+	keySlice := strings.Split(key, "/")
+	if len(keySlice) == 3 {
+		reqMeta.Kind = keySlice[1]
+		reqMeta.Namespace = keySlice[2]
+	} else if len(keySlice) == 2 {
+		reqMeta.Kind = keySlice[1]
+	} 
+
+	glog.V(4).Infof("extract key %v out reqmeta %#v", key, reqMeta)
+
+	return reqMeta	
+}
