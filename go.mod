@@ -6,43 +6,41 @@ go 1.12
 
 require (
 	github.com/Azure/go-ansiterm v0.0.0-20170929234023-d6e3b3328b78 // indirect
-	github.com/BurntSushi/toml v0.3.0 // indirect
 	github.com/NYTimes/gziphandler v0.0.0-20170623195520-56545f4a5d46 // indirect
 	github.com/coreos/bbolt v1.3.1-coreos.6 // indirect
 	github.com/coreos/etcd v3.3.10+incompatible
 	github.com/coreos/go-oidc v0.0.0-20180117170138-065b426bd416
 	github.com/coreos/go-semver v0.0.0-20180108230905-e214231b295a // indirect
-	github.com/coreos/go-systemd v0.0.0-20180511133405-39ca1b05acc7
+	github.com/coreos/go-systemd v0.0.0-20181012123002-c6f51f82210d
 	github.com/coreos/pkg v0.0.0-20180108230652-97fdf19511ea
 	github.com/docker/docker v0.7.3-0.20190327010347-be7ac8be2ae0
 	github.com/emicklei/go-restful v0.0.0-20170410110728-ff4f55a20633
 	github.com/evanphx/json-patch v0.0.0-20190203023257-5858425f7550
-	github.com/ghodss/yaml v0.0.0-20180820084758-c7ce16629ff4 // indirect
+	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/go-openapi/jsonpointer v0.19.0 // indirect
 	github.com/go-openapi/jsonreference v0.19.0 // indirect
 	github.com/go-openapi/spec v0.17.2
 	github.com/go-openapi/swag v0.17.2 // indirect
-	github.com/gogo/protobuf v0.0.0-20171007142547-342cbe0a0415
-	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b // indirect
-	github.com/google/go-cmp v0.2.0 // indirect
+	github.com/gogo/protobuf v1.2.0
+	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/google/gofuzz v0.0.0-20170612174753-24818f796faf
 	github.com/googleapis/gnostic v0.0.0-20170729233727-0c5108395e2d
 	github.com/gorilla/websocket v0.0.0-20170926233335-4201258b820c // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v0.0.0-20190222133341-cfaf5686ec79 // indirect
 	github.com/grpc-ecosystem/go-grpc-prometheus v0.0.0-20170330212424-2500245aa611
-	github.com/grpc-ecosystem/grpc-gateway v1.3.0 // indirect
+	github.com/grpc-ecosystem/grpc-gateway v1.6.2 // indirect
 	github.com/hashicorp/golang-lru v0.5.0
+	github.com/jinzhu/gorm v1.9.4
 	github.com/jonboulle/clockwork v0.0.0-20141017032234-72f9bd7c4e0c // indirect
+	github.com/mattn/go-sqlite3 v1.10.0
 	github.com/munnerz/goautoneg v0.0.0-20120707110453-a547fc61f48d
 	github.com/natefinch/lumberjack v2.0.0+incompatible // indirect
 	github.com/pborman/uuid v1.2.0
 	github.com/philhofer/fwd v1.0.0 // indirect
-	github.com/pkg/errors v0.8.0 // indirect
 	github.com/pquerna/cachecontrol v0.0.0-20171018203845-0dec1b30a021 // indirect
 	github.com/pquerna/ffjson v0.0.0-20180717144149-af8b230fcd20 // indirect
-	github.com/prometheus/client_golang v0.9.2
-	github.com/prometheus/client_model v0.0.0-20180712105110-5c3871d89910
-	github.com/sirupsen/logrus v1.2.0 // indirect
+	github.com/prometheus/client_golang v0.9.3-0.20190127221311-3c4408c8b829
+	github.com/prometheus/client_model v0.0.0-20190115171406-56726106282f
 	github.com/soheilhy/cmux v0.1.3 // indirect
 	github.com/spf13/pflag v1.0.1
 	github.com/stretchr/testify v1.2.2
@@ -53,14 +51,13 @@ require (
 	go.uber.org/atomic v0.0.0-20181018215023-8dc6146f7569 // indirect
 	go.uber.org/multierr v0.0.0-20180122172545-ddea229ff1df // indirect
 	go.uber.org/zap v0.0.0-20180814183419-67bc79d13d15 // indirect
-	golang.org/x/crypto v0.0.0-20181025213731-e84da0312774
-	golang.org/x/net v0.0.0-20190206173232-65e2d4e15006
-	google.golang.org/genproto v0.0.0-20170731182057-09f6ed296fc6 // indirect
-	google.golang.org/grpc v1.13.0
+	golang.org/x/crypto v0.0.0-20190325154230-a5d413f7728c
+	golang.org/x/net v0.0.0-20190311183353-d8887717615a
+	google.golang.org/grpc v1.19.0
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0-20150622162204-20b71e5b60d7
 	gopkg.in/square/go-jose.v2 v2.0.0-20180411045311-89060dee6a84
 	gopkg.in/yaml.v1 v1.0.0-20140924161607-9f9df34309c0 // indirect
-	gopkg.in/yaml.v2 v2.2.1
+	gopkg.in/yaml.v2 v2.2.2
 	gotest.tools v2.2.0+incompatible // indirect
 	k8s.io/api v0.0.0-20190430012547-97d6bb8ea5f4
 	k8s.io/apimachinery v0.0.0-20190425132440-17f84483f500
