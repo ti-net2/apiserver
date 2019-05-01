@@ -14,9 +14,8 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/golang/glog"
-
 	"k8s.io/apiserver/pkg/storage/mongodbs/client"
+	"k8s.io/klog"
 
 	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -187,7 +186,7 @@ func (s *store) GuaranteedUpdate(ctx context.Context, key string, out runtime.Ob
 
 	err = s.getObject(meta, key, out, false)
 	if err != nil {
-		glog.Infof("not found %v", err)
+		klog.Infof("not found %v", err)
 		return err
 	}
 

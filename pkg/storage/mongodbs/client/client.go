@@ -6,7 +6,7 @@ import (
 
 	"k8s.io/apiserver/pkg/storage"
 
-	"github.com/golang/glog"
+	"k8s.io/klog"
 
 	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
@@ -86,28 +86,28 @@ func MongoEnsureIndex(req *RequestMeta, indexes []string) error {
 	collectExist := false
 	db, err := mongoGetDatabase(meta)
 	if err != nil {
-		glog.Errorf("Got database:%s err:%s", meta.DBName, err)
+		klog.Errorf("Got database:%s err:%s", meta.DBName, err)
 		return err
 	}
 	collectExist, err = isCollectionExist(meta.Collection, db)
 	if err != nil {
-		glog.Errorf("Check Collection:%s exist err:%s", meta.Collection, err)
+		klog.Errorf("Check Collection:%s exist err:%s", meta.Collection, err)
 		return err
 	}
 
 	c, err := mongoGetCollection(meta)
 	if err != nil {
-		glog.Errorf("Got Collection:%s err:%s", meta.Collection, err)
+		klog.Errorf("Got Collection:%s err:%s", meta.Collection, err)
 		return err
 	}
 
 	if !collectExist {
-		glog.Infof("Collection:%s not exist", meta.Collection)
+		klog.Infof("Collection:%s not exist", meta.Collection)
 	} else {
 		var indexAll []mgo.Index
 		indexAll, err = c.Indexes()
 		if err != nil {
-			glog.Errorf("Get index with Collection:%s err:%s", meta.Collection, err)
+			klog.Errorf("Get index with Collection:%s err:%s", meta.Collection, err)
 			return err
 		}
 
@@ -117,7 +117,7 @@ func MongoEnsureIndex(req *RequestMeta, indexes []string) error {
 			}
 
 			for i, item := range indexItem.Key {
-				glog.V(5).Infof("Traversal index:%v, custom Index:%v", item, indexes[i])
+				klog.V(5).Infof("Traversal index:%v, custom Index:%v", item, indexes[i])
 				if item != indexes[i] {
 					found = false
 					break
@@ -132,7 +132,7 @@ func MongoEnsureIndex(req *RequestMeta, indexes []string) error {
 		}
 	}
 
-	glog.V(5).Infof("Collection index found=%v", found)
+	klog.V(5).Infof("Collection index found=%v", found)
 	//index not exist,make a index
 	if !found {
 		newIndex := mgo.Index{
@@ -157,28 +157,28 @@ func MongoEnsureIndexWithExpire(req *RequestMeta, indexes []string, afterTime ti
 	collectExist := false
 	db, err := mongoGetDatabase(meta)
 	if err != nil {
-		glog.Errorf("Got database:%s err:%s", meta.DBName, err)
+		klog.Errorf("Got database:%s err:%s", meta.DBName, err)
 		return err
 	}
 	collectExist, err = isCollectionExist(meta.Collection, db)
 	if err != nil {
-		glog.Errorf("Check Collection:%s exist err:%s", meta.Collection, err)
+		klog.Errorf("Check Collection:%s exist err:%s", meta.Collection, err)
 		return err
 	}
 
 	c, err := mongoGetCollection(meta)
 	if err != nil {
-		glog.Errorf("Got Collection:%s err:%s", meta.Collection, err)
+		klog.Errorf("Got Collection:%s err:%s", meta.Collection, err)
 		return err
 	}
 
 	if !collectExist {
-		glog.Infof("Collection:%s not exist", meta.Collection)
+		klog.Infof("Collection:%s not exist", meta.Collection)
 	} else {
 		var indexAll []mgo.Index
 		indexAll, err = c.Indexes()
 		if err != nil {
-			glog.Errorf("Get index with Collection:%s err:%s", meta.Collection, err)
+			klog.Errorf("Get index with Collection:%s err:%s", meta.Collection, err)
 			return err
 		}
 
@@ -188,7 +188,7 @@ func MongoEnsureIndexWithExpire(req *RequestMeta, indexes []string, afterTime ti
 			}
 
 			for i, item := range indexItem.Key {
-				glog.V(5).Infof("Traversal index:%v, custom Index:%v", item, indexes[i])
+				klog.V(5).Infof("Traversal index:%v, custom Index:%v", item, indexes[i])
 				if item != indexes[i] {
 					found = false
 					break
@@ -203,7 +203,7 @@ func MongoEnsureIndexWithExpire(req *RequestMeta, indexes []string, afterTime ti
 		}
 	}
 
-	glog.V(5).Infof("Collection index found=%v", found)
+	klog.V(5).Infof("Collection index found=%v", found)
 	//index not exist,make a index
 	if !found {
 		newIndex := mgo.Index{
@@ -223,7 +223,7 @@ func MongoEnsureIndexWithExpire(req *RequestMeta, indexes []string, afterTime ti
 func MongoQueryCount(req *RequestMeta, query *QueryMetaData) (int, error) {
 	meta := cloneRequestMeta(req)
 	defer meta.Sess.Close()
-	glog.V(5).Infof("Mongo query all with collection:%s", meta.Collection)
+	klog.V(5).Infof("Mongo query all with collection:%s", meta.Collection)
 
 	c, err := mongoGetCollection(meta)
 	if err != nil {
@@ -231,7 +231,7 @@ func MongoQueryCount(req *RequestMeta, query *QueryMetaData) (int, error) {
 	}
 
 	condition := mongoQueryCondition(query)
-	glog.V(5).Infof("Mongo query build condition:%+v", condition)
+	klog.V(5).Infof("Mongo query build condition:%+v", condition)
 
 	return c.Find(condition).Count()
 }
@@ -240,14 +240,14 @@ func MongoNormalQuery(req *RequestMeta, query *QueryMetaData, result interface{}
 	meta := cloneRequestMeta(req)
 	defer meta.Sess.Close()
 
-	glog.V(5).Infof("Mongo query all with collection:%s", meta.Collection)
+	klog.V(5).Infof("Mongo query all with collection:%s", meta.Collection)
 
 	c, err := mongoGetCollection(meta)
 	if err != nil {
 		return err
 	}
 
-	glog.V(5).Infoln("Mongo query build condition...")
+	klog.V(5).Infoln("Mongo query build condition...")
 	condition := mongoQueryCondition(query)
 
 	resultSets := c.Find(condition)
@@ -272,7 +272,7 @@ func MongoQueryOne(req *RequestMeta, query *QueryMetaData, result interface{}) e
 	meta := cloneRequestMeta(req)
 	defer meta.Sess.Close()
 
-	glog.V(5).Infof("Mongo query with collection:%s", meta.Collection)
+	klog.V(5).Infof("Mongo query with collection:%s", meta.Collection)
 
 	c, err := mongoGetCollection(meta)
 	if err != nil {
@@ -280,7 +280,7 @@ func MongoQueryOne(req *RequestMeta, query *QueryMetaData, result interface{}) e
 	}
 
 	condition := mongoQueryCondition(query)
-	glog.V(5).Infof("Mongo query build condition:%+v", condition)
+	klog.V(5).Infof("Mongo query build condition:%+v", condition)
 
 	return c.Find(condition).One(result)
 
@@ -290,11 +290,11 @@ func MongoQueryOneNoCondition(req *RequestMeta, result interface{}) error {
 
 	meta := cloneRequestMeta(req)
 	defer meta.Sess.Close()
-	glog.V(5).Infof("Mongo query no condition with collection:%s", meta.Collection)
+	klog.V(5).Infof("Mongo query no condition with collection:%s", meta.Collection)
 
 	c, err := mongoGetCollection(meta)
 	if err != nil {
-		glog.Errorf("MongoQueryOneNoCondition err %v", err)
+		klog.Errorf("MongoQueryOneNoCondition err %v", err)
 		return err
 	}
 
@@ -308,7 +308,7 @@ func MongInsertOne(req *RequestMeta, docs interface{}) error {
 
 	c, err := mongoGetCollection(meta)
 	if err != nil {
-		glog.V(5).Infoln("MongInsertOne err ")
+		klog.V(5).Infoln("MongInsertOne err ")
 		return err
 	}
 

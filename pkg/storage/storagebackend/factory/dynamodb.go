@@ -8,7 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/golang/glog"
+	"k8s.io/klog"
 )
 
 //newDynamodbSession create session with config and credentials
@@ -29,7 +29,7 @@ func newDynamodbSession(cfg storagebackend.AWSDynamoDBConfig) (*session.Session,
 		Config: config,
 	})
 	if err != nil {
-		glog.Fatalf("create aws session error %v\r\n", err.Error())
+		klog.Fatalf("create aws session error %v\r\n", err.Error())
 		return nil, err
 	}
 

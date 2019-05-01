@@ -7,6 +7,7 @@ go 1.12
 require (
 	github.com/Azure/go-ansiterm v0.0.0-20170929234023-d6e3b3328b78 // indirect
 	github.com/NYTimes/gziphandler v0.0.0-20170623195520-56545f4a5d46 // indirect
+	github.com/aws/aws-sdk-go v1.19.14
 	github.com/coreos/bbolt v1.3.1-coreos.6 // indirect
 	github.com/coreos/etcd v3.3.10+incompatible
 	github.com/coreos/go-oidc v0.0.0-20180117170138-065b426bd416

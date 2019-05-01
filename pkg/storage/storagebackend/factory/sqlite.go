@@ -16,8 +16,7 @@ import (
 	"k8s.io/apiserver/pkg/storage"
 	"k8s.io/apiserver/pkg/storage/sqlite"
 	"k8s.io/apiserver/pkg/storage/storagebackend"
-
-	"github.com/golang/glog"
+	"k8s.io/klog"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -26,7 +25,7 @@ func newSqliteClient(dsn string, debug bool) (*sql.DB, error) {
 
 	connStr := string(dsn)
 	if debug {
-		glog.Infof("sqlite finish connect dsn %v", dsn)
+		klog.Infof("sqlite finish connect dsn %v", dsn)
 	}
 	db, err := sql.Open(string("sqlite3"), connStr)
 	if err != nil {

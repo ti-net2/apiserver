@@ -29,8 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/storage"
 	utiltrace "k8s.io/utils/trace"
-
-	"github.com/golang/glog"
+	"k8s.io/klog"
 	dbmysql "github.com/jinzhu/gorm"
 )
 
@@ -79,7 +78,7 @@ const (
 func newStore(client *dbmysql.DB, codec runtime.Codec, version string, defaultLimit int) *store {
 	versioner := mysqls.APIObjectVersioner{}
 	if len(version) == 0 {
-		glog.Fatalln("need give a storage version for mysql backend")
+		klog.Fatalln("need give a storage version for mysql backend")
 	}
 	if defaultLimit <= 0 {
 		defaultLimit = 1000
@@ -277,7 +276,7 @@ func (s *store) GuaranteedUpdate(
 
 	ret, _, err := s.updateObj(oriObject, tryUpdate)
 	if err != nil {
-		glog.V(9).Infof("user update error :%v\r\n", err)
+		klog.V(9).Infof("user update error :%v\r\n", err)
 		return storage.NewInternalErrorf("key %s error:%v", key, err.Error())
 	}
 
@@ -322,7 +321,7 @@ func (s *store) GetToList(ctx context.Context, key string, resourceVersion strin
 		return storage.NewKeyNotFoundError(key, 0)
 	}
 
-	glog.Infof("Call GetToList key %v pred %v ctx %v", key, pred, ctx)
+	klog.Infof("Call GetToList key %v pred %v ctx %v", key, pred, ctx)
 
 	data := []dataModel{}
 	dbHandle := s.client.Table(kind)
@@ -547,7 +546,7 @@ func (s *store) Count(key string) (int64, error) {
 	if len(kind) == 0 {
 		return 0, storage.NewKeyNotFoundError(key, 0)
 	}
-	glog.Infof("call count with key %v kind %v", key, kind)
+	klog.Infof("call count with key %v kind %v", key, kind)
 
 	var count uint64
 

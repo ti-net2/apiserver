@@ -13,7 +13,7 @@ package pages
 import (
 	"fmt"
 
-	"github.com/golang/glog"
+	"k8s.io/klog"
 )
 
 //BuildPageLink build a string 'Link' that like as :
@@ -22,7 +22,7 @@ import (
 // "/api/v1beta1/users?pageSelector=page=5,perPage=1; rel=last"
 func BuildDefPageLink(pager Selector, baseLink string) (string, error) {
 
-	glog.V(5).Infof("Got base link %v\r\n", baseLink)
+	klog.V(5).Infof("Got base link %v\r\n", baseLink)
 	var link string
 
 	if pager == nil {

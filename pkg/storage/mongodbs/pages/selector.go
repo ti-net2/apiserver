@@ -16,7 +16,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/golang/glog"
+	"k8s.io/klog"
 )
 
 type Selector interface {
@@ -93,7 +93,7 @@ func (h *hasPage) SetItemTotal(itemsSum uint64) {
 	remainder := h.itemTotal % h.requirePagination[1]
 	page := h.itemTotal / h.requirePagination[1]
 
-	glog.Infof("pagination:remainder:%v,page:%v", remainder, page)
+	klog.Infof("pagination:remainder:%v,page:%v", remainder, page)
 
 	if page == 0 {
 		if page+remainder < h.requirePagination[0] {
@@ -151,7 +151,7 @@ func (h *hasPage) SetItemTotal(itemsSum uint64) {
 		}
 	}
 
-	glog.Infof("pagination:%+v", *h)
+	klog.Infof("pagination:%+v", *h)
 }
 
 func (h *hasPage) Empty() bool {
@@ -217,7 +217,7 @@ func parsePagination(pagination string) (Selector, error) {
 	perPage = 0
 	var err error
 
-	glog.Infof("parse pagination:%s", pagination)
+	klog.Infof("parse pagination:%s", pagination)
 
 	if len(pagination) == 0 {
 		return nil, nil

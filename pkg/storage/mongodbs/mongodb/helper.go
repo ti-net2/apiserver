@@ -23,7 +23,7 @@ import (
 	"k8s.io/apiserver/pkg/storage/mongodbs/client"
 	"k8s.io/apiserver/pkg/storage/mongodbs/pages"
 
-	"github.com/golang/glog"
+	"k8s.io/klog"
 	"gopkg.in/mgo.v2/bson"
 )
 
@@ -44,7 +44,7 @@ type selectorItem struct {
 }
 
 func labelsSelectorToCondition(labels string, condition *client.QueryMetaData) {
-	glog.V(5).Infof("mongo driver list with filter(%s):labelsSelectorToCondition", labels)
+	klog.V(5).Infof("mongo driver list with filter(%s):labelsSelectorToCondition", labels)
 }
 
 func try(selectorPiece, op string) (lhs, rhs string, ok bool) {
@@ -64,7 +64,7 @@ func parseFields(selector string, selectorItems *[]selectorItem) error {
 		if part == "" {
 			continue
 		}
-		glog.V(5).Infof("Parse filed:%v", part)
+		klog.V(5).Infof("Parse filed:%v", part)
 		if lhs, rhs, ok := try(part, string(notEqualsOperator)); ok {
 			*selectorItems = append(*selectorItems, selectorItem{key: lhs, value: rhs, opCode: notEqualsOperator})
 		} else if lhs, rhs, ok := try(part, string(doubleEqualsOperator)); ok {
@@ -79,18 +79,18 @@ func parseFields(selector string, selectorItems *[]selectorItem) error {
 }
 
 func fieldsSelectorToCondition(fields string, selector []selectorItem, condition *client.QueryMetaData) {
-	glog.V(5).Infof("mongo driver list with filter(%s):fieldsSelectorToCondition", fields)
+	klog.V(5).Infof("mongo driver list with filter(%s):fieldsSelectorToCondition", fields)
 
 	err := parseFields(fields, &selector)
 	if err != nil {
-		glog.Errorf("parse fields err:%v", err)
+		klog.Errorf("parse fields err:%v", err)
 		return
 	}
 
 	items := selector
 	if len(items) > 0 {
 		condition.Condition["$and"] = []bson.M{}
-		glog.V(5).Infof("Convert selector items(%+v) to condition", items)
+		klog.V(5).Infof("Convert selector items(%+v) to condition", items)
 		for _, item := range items {
 			equalRegex := fmt.Sprintf("\"%v\":\"%v\"", item.key, item.value)
 			equalRegexBson := bson.M{"value": bson.M{"$regex": bson.RegEx{equalRegex, ""}}}
@@ -103,24 +103,24 @@ func fieldsSelectorToCondition(fields string, selector []selectorItem, condition
 			case doubleEqualsOperator:
 				condition.Condition["$and"] = append(condition.Condition["$and"].([]bson.M), equalRegexBson)
 			case notEqualsOperator:
-				glog.V(5).Infof("Convert selector item(%+v) to condition", item)
+				klog.V(5).Infof("Convert selector item(%+v) to condition", item)
 				condition.Condition["$and"] = append(condition.Condition["$and"].([]bson.M), notEqualRegexBson)
 			default:
-				glog.Warningln("invalid selector operator")
+				klog.Warningln("invalid selector operator")
 			}
 		}
 	}
 }
 
 func pagerToCondition(meta *client.RequestMeta, pager pages.Selector, condition *client.QueryMetaData) {
-	glog.V(5).Infof("mongo driver list with filter:pagerToCondition")
+	klog.V(5).Infof("mongo driver list with filter:pagerToCondition")
 
 	itemSum, err := client.MongoQueryCount(meta, condition)
 	if err != nil {
-		glog.Errorf("Request Document Count err:%v", err)
+		klog.Errorf("Request Document Count err:%v", err)
 		return
 	}
-	glog.V(5).Infof("Query Count is:%v", itemSum)
+	klog.V(5).Infof("Query Count is:%v", itemSum)
 	//update current item sum
 	pager.SetItemTotal(uint64(itemSum))
 

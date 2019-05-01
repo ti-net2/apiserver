@@ -26,8 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/storage"
 	utiltrace "k8s.io/utils/trace"
-
-	"github.com/golang/glog"
+	"k8s.io/klog"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -71,7 +70,7 @@ func New(client *sql.DB, codec runtime.Codec, version string, defaultLimit int) 
 func newStore(client *sql.DB, codec runtime.Codec, version string, defaultLimit int) *store {
 	versioner := APIObjectVersioner{}
 	if len(version) == 0 {
-		glog.Fatalln("need give a storage version for sqlite backend")
+		klog.Fatalln("need give a storage version for sqlite backend")
 	}
 	if defaultLimit <= 0 {
 		defaultLimit = 1000
@@ -79,7 +78,7 @@ func newStore(client *sql.DB, codec runtime.Codec, version string, defaultLimit 
 
 	_, err := client.Exec(table)
 	if err != nil {
-		glog.Fatalln("create sqlite table failure for sqlite backend err %v", err)
+		klog.Fatalln("create sqlite table failure for sqlite backend err %v", err)
 	}
 
 	return &store{
@@ -334,7 +333,7 @@ func (s *store) GuaranteedUpdate(
 
 	ret, _, err := s.updateObj(oriObject, tryUpdate)
 	if err != nil {
-		glog.V(9).Infof("user update error :%v\r\n", err)
+		klog.V(9).Infof("user update error :%v\r\n", err)
 		return storage.NewInternalErrorf("key %s error:%v", key, err.Error())
 	}
 

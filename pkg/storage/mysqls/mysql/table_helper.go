@@ -10,8 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/cache"
-
-	"github.com/golang/glog"
+	"k8s.io/klog"
 )
 
 const (
@@ -252,7 +251,7 @@ func GetTable(ctx context.Context, obj runtime.Object) (*Table, error) {
 		return nil, fmt.Errorf("in %v tableTag(%v) not find rawobj field in struct or rawobj type is not a []byte", table.name, table.freezerTag)
 	}
 
-	glog.V(5).Infof("find table %+v", table)
+	klog.V(5).Infof("find table %+v", table)
 	tableCache.Add(kind, table, 24*time.Hour)
 
 	WithTable(ctx, table)

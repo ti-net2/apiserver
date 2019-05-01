@@ -8,7 +8,7 @@ See docs/ for more information about the  project.
 
 */
 
- package mysql
+package mysql
 
 // import (
 // 	"context"
@@ -260,7 +260,7 @@ See docs/ for more information about the  project.
 // 		return nil, fmt.Errorf("in %v tableTag(%v) not find rawobj field in struct or rawobj type is not a []byte", table.name, table.freezerTag)
 // 	}
 
-// 	glog.V(5).Infof("find table %+v", table)
+// 	klog.V(5).Infof("find table %+v", table)
 // 	tableCache.Add(kind, table, 24*time.Hour)
 
 // 	WithTable(ctx, table)
@@ -494,7 +494,7 @@ See docs/ for more information about the  project.
 // 		case selection.In:
 // 			fallthrough
 // 		case selection.NotIn:
-// 			glog.Warningf("strange operator. check value in field in talbe(%v)", t.name)
+// 			klog.Warningf("strange operator. check value in field in talbe(%v)", t.name)
 // 		case selection.DoesNotExist:
 // 			fallthrough
 // 		case selection.Exists:

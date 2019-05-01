@@ -6,10 +6,8 @@ import (
 	"k8s.io/apiserver/pkg/storage"
 	"k8s.io/apiserver/pkg/storage/mongodbs/mongodb"
 	"k8s.io/apiserver/pkg/storage/storagebackend"
-
 	"gopkg.in/mgo.v2"
-
-	"github.com/golang/glog"
+	"k8s.io/klog"
 )
 
 //dial mongo db with admin db, admin user, admin passwd
@@ -30,7 +28,7 @@ func newMongoDBClient(cfg storagebackend.MongoExtendConfig) (*mgo.Session, error
 	// to our MongoDB.
 	mongoSession, err := mgo.DialWithInfo(mongoDBDialInfo)
 	if err != nil {
-		glog.Fatalf("CreateSession:%s\n", err)
+		klog.Fatalf("CreateSession:%s\n", err)
 		return nil, err
 	}
 	mongoSession.SetMode(mgo.Monotonic, true)

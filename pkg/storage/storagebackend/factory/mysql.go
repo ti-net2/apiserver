@@ -7,9 +7,8 @@ import (
 	"k8s.io/apiserver/pkg/storage"
 	"k8s.io/apiserver/pkg/storage/mysqls/mysql"
 	"k8s.io/apiserver/pkg/storage/storagebackend"
-
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/golang/glog"
+	"k8s.io/klog"
 	dbmysql "github.com/jinzhu/gorm"
 )
 
@@ -26,7 +25,7 @@ func newMysqlClient(connectionStr string, debug bool) (*dbmysql.DB, error) {
 
 	onlyConStr := conInfo[0] + "/"
 	databaseName := conInfo[1]
-	glog.V(5).Infof("database connection %v name %v err %v", onlyConStr, databaseName, err)
+	klog.V(5).Infof("database connection %v name %v err %v", onlyConStr, databaseName, err)
 	if err != nil {
 		tmpDB, err := dbmysql.Open(string("mysql"), onlyConStr)
 		if err != nil {

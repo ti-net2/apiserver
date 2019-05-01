@@ -18,8 +18,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apiserver/pkg/storage"
-
-	"github.com/golang/glog"
+	"k8s.io/klog"
 	"github.com/jinzhu/gorm"
 )
 
@@ -67,7 +66,7 @@ func selectionWithFields(dbHandle *gorm.DB, p storage.SelectionPredicate, isCoun
 		case selection.In:
 			fallthrough
 		case selection.NotIn:
-			glog.Warningf("not support in and not in")
+			klog.Warningf("not support in and not in")
 		case selection.DoesNotExist:
 			fallthrough
 		case selection.Exists:
@@ -109,7 +108,7 @@ func extractKey(ctx context.Context, key string) *requestMeta {
 		reqMeta.Kind = keySlice[1]
 	}
 
-	glog.V(4).Infof("extract key %v out reqmeta %#v", key, reqMeta)
+	klog.V(4).Infof("extract key %v out reqmeta %#v", key, reqMeta)
 
 	return reqMeta
 }
@@ -125,7 +124,7 @@ func extracListKey(ctx context.Context, key string) *requestMeta {
 		reqMeta.Kind = keySlice[1]
 	} 
 
-	glog.V(4).Infof("extract key %v out reqmeta %#v", key, reqMeta)
+	klog.V(4).Infof("extract key %v out reqmeta %#v", key, reqMeta)
 
 	return reqMeta	
 }
