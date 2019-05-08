@@ -22,15 +22,15 @@ import (
 
 	"k8s.io/apiserver/pkg/storage/mysqls"
 
+	dbmysql "github.com/jinzhu/gorm"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/storage"
-	utiltrace "k8s.io/utils/trace"
 	"k8s.io/klog"
-	dbmysql "github.com/jinzhu/gorm"
+	utiltrace "k8s.io/utils/trace"
 )
 
 const (
@@ -384,6 +384,10 @@ func (s *store) List(ctx context.Context, key string, resourceVersion string, pr
 		return storage.NewKeyNotFoundError(key, 0)
 	}
 
+	if !s.client.HasTable(kind) {
+		s.createTable(kind)
+	}
+
 	dbHandle := s.client.Table(kind)
 
 	var skip uint64
@@ -548,10 +552,15 @@ func (s *store) Count(key string) (int64, error) {
 	}
 	klog.Infof("call count with key %v kind %v", key, kind)
 
+	if !s.client.HasTable(kind) {
+		s.createTable(kind)
+	}
+
 	var count uint64
 
 	err := s.client.Table(kind).Count(&count).Error
 	if err != nil {
+
 		return 0, storage.NewInternalErrorf("key %v, query count error %v", key, err)
 	}
 

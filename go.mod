@@ -22,6 +22,7 @@ require (
 	github.com/go-openapi/jsonreference v0.19.0 // indirect
 	github.com/go-openapi/spec v0.17.2
 	github.com/go-openapi/swag v0.17.2 // indirect
+	github.com/go-sql-driver/mysql v1.4.1
 	github.com/gogo/protobuf v1.2.0
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/google/gofuzz v0.0.0-20170612174753-24818f796faf
@@ -55,6 +56,7 @@ require (
 	golang.org/x/crypto v0.0.0-20190325154230-a5d413f7728c
 	golang.org/x/net v0.0.0-20190311183353-d8887717615a
 	google.golang.org/grpc v1.19.0
+	gopkg.in/mgo.v2 v2.0.0-20180705113604-9856a29383ce
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0-20150622162204-20b71e5b60d7
 	gopkg.in/square/go-jose.v2 v2.0.0-20180411045311-89060dee6a84
 	gopkg.in/yaml.v1 v1.0.0-20140924161607-9f9df34309c0 // indirect
