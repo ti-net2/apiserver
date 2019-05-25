@@ -388,23 +388,42 @@ func (s *store) List(ctx context.Context, key string, resourceVersion string, pr
 		s.createTable(kind)
 	}
 
-	dbHandle := s.client.Table(kind)
+	data := []dataModel{}
+	dbHandle := s.client.Table(kind).Model(&data).Order("id")
+
+	//check namesapce
+	if len(reqMeta.Namespace) != 0 {
+		query := fmt.Sprintf("namespace = ?")
+		queryArgs := []interface{}{reqMeta.Namespace}
+		dbHandle = dbHandle.Where(query, queryArgs...)
+	}
+	dbHandle = selectionWithFields(dbHandle, pred, true)
+
+	//first get list count by selection
+	var listCount uint64
+	err = dbHandle.Count(&listCount).Error
+	if err != nil {
+		return storage.NewInternalErrorf("key %v, query count error %v", key, err)
+	}
+	klog.V(3).Infof("find current list count %v", listCount)
 
 	var skip uint64
 	var hasMore bool
 	var nextSkip uint64
 	var limit uint64
-	switch {
-	case len(pred.Continue) > 0:
+
+	if len(pred.Continue) > 0 {
 		//continue
 		skip, err = decodeContinue(pred.Continue)
 		if err != nil {
 			return apierrors.NewBadRequest(fmt.Sprintf("invalid continue token: %v", err))
 		}
-	case pred.Limit > 0:
+	}
+
+	if pred.Limit > 0 {
 		//first resource
 		limit = uint64(pred.Limit)
-	default:
+	} else {
 		limit = uint64(s.listDefaultLimit)
 	}
 
@@ -413,25 +432,15 @@ func (s *store) List(ctx context.Context, key string, resourceVersion string, pr
 		dbHandle = dbHandle.Limit(limit)
 	}
 
-	//first get list count by selection
-	var listCount uint64
-	dbHandle = selectionWithFields(dbHandle, pred, true)
-	dbHandle = dbHandle.Order("id")
 	if skip > 0 {
 		dbHandle = dbHandle.Offset(skip)
 	}
 
-	//check namesapce
-	if len(reqMeta.Namespace) != 0 {
-		query := fmt.Sprintf("namespace = ?")
-		queryArgs := []interface{}{reqMeta.Namespace}
-		dbHandle = dbHandle.Where(query, queryArgs...)
+	klog.V(3).Infof("input pred %+v current limit %v skip %v", pred, limit, skip)
+	if err := dbHandle.Find(&data).Error; err != nil {
+		return storage.NewInternalErrorf(key, err.Error())
 	}
 
-	err = dbHandle.Count(&listCount).Error
-	if err != nil {
-		return storage.NewInternalErrorf("key %v, query count error %v", key, err)
-	}
 	if uint64(limit) >= listCount {
 		hasMore = false
 	} else {
@@ -439,11 +448,6 @@ func (s *store) List(ctx context.Context, key string, resourceVersion string, pr
 		nextSkip = skip + uint64(limit)
 	}
 	growSlice(v, 2048, int(limit))
-
-	data := []dataModel{}
-	if err := dbHandle.Find(&data).Error; err != nil {
-		return storage.NewInternalErrorf(key, err.Error())
-	}
 
 	for _, dataVal := range data {
 		if err := appendListItem(v, dataVal.Obj, uint64(0), pred, s.codec, s.versioner); err != nil {
