@@ -342,6 +342,7 @@ func (s *store) GetToList(ctx context.Context, key string, resourceVersion strin
 
 type continueToken struct {
 	Start uint64 `json:"start"`
+	Total uint64 `json:"total"`
 }
 
 // parseFrom transforms an encoded predicate from into a versioned struct.
@@ -360,8 +361,8 @@ func decodeContinue(continueValue string) (skip uint64, err error) {
 }
 
 // encodeContinue returns a string representing the encoded continuation of the current query.
-func encodeContinue(start uint64, resourceVersion int64) (string, error) {
-	out, err := json.Marshal(&continueToken{Start: start})
+func encodeContinue(start, total uint64, resourceVersion int64) (string, error) {
+	out, err := json.Marshal(&continueToken{Start: start, Total: total})
 	if err != nil {
 		return "", err
 	}
@@ -459,7 +460,7 @@ func (s *store) List(ctx context.Context, key string, resourceVersion string, pr
 	// we never return a key that the client wouldn't be allowed to see
 	if hasMore {
 		// we want to start immediately after the last key
-		next, err := encodeContinue(nextSkip, 0)
+		next, err := encodeContinue(nextSkip, listCount, 0)
 		if err != nil {
 			return storage.NewInternalErrorf(key, err.Error())
 		}
