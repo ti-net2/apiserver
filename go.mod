@@ -63,10 +63,10 @@ require (
 	gopkg.in/yaml.v2 v2.2.2
 	gotest.tools v2.2.0+incompatible // indirect
 	k8s.io/api v0.0.0-20190430012547-97d6bb8ea5f4
-	k8s.io/apimachinery v0.0.0-20190425132440-17f84483f500
+	k8s.io/apimachinery v0.0.0-20190612125636-6a5db36e93ad
 	k8s.io/client-go v0.0.0-20190425172711-65184652c889
 	k8s.io/component-base v0.0.0-20190612130303-4062e14deeb
-	k8s.io/klog v0.3.0
+	k8s.io/klog v0.3.1
 	k8s.io/kube-openapi v0.0.0-20190228160746-b3a7cee44a30
 	k8s.io/utils v0.0.0-20190221042446-c2654d5206da
 	sigs.k8s.io/structured-merge-diff v0.0.0-20190302045857-e85c7b244fd2

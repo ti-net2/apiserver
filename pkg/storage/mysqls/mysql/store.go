@@ -456,19 +456,12 @@ func (s *store) List(ctx context.Context, key string, resourceVersion string, pr
 		}
 	}
 
-	// instruct the client to begin querying from immediately after the last key we returned
-	// we never return a key that the client wouldn't be allowed to see
-	if hasMore {
-		// we want to start immediately after the last key
-		next, err := encodeContinue(nextSkip, listCount, 0)
-		if err != nil {
-			return storage.NewInternalErrorf(key, err.Error())
-		}
-		return s.versioner.UpdateList(listObj, uint64(0), next)
+	next, err := encodeContinue(nextSkip, listCount, 0)
+	if err != nil {
+		return storage.NewInternalErrorf(key, err.Error())
 	}
-
 	// no continuation
-	return s.versioner.UpdateList(listObj, uint64(0), "")
+	return s.versioner.UpdateList(listObj, uint64(0), next)
 }
 
 // growSlice takes a slice value and grows its capacity up
