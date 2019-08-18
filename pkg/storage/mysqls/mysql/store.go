@@ -409,7 +409,6 @@ func (s *store) List(ctx context.Context, key string, resourceVersion string, pr
 	klog.V(3).Infof("find current list count %v", listCount)
 
 	var skip uint64
-	var hasMore bool
 	var nextSkip uint64
 	var limit uint64
 
@@ -442,10 +441,7 @@ func (s *store) List(ctx context.Context, key string, resourceVersion string, pr
 		return storage.NewInternalErrorf(key, err.Error())
 	}
 
-	if uint64(limit) >= listCount {
-		hasMore = false
-	} else {
-		hasMore = true
+	if !(uint64(limit) >= listCount) {
 		nextSkip = skip + uint64(limit)
 	}
 	growSlice(v, 2048, int(limit))
