@@ -46,6 +46,9 @@ type RequestInfo struct {
 	// Verb is the kube verb associated with the request for API requests, not the http verb.  This includes things like list and watch.
 	// for non-resource requests, this is the lowercase http verb
 	Verb string
+	//Cookies is the http header contains cookie
+	//this add by seanchann
+	Cookies []http.Cookie
 
 	APIPrefix  string
 	APIGroup   string
@@ -119,6 +122,14 @@ func (r *RequestInfoFactory) NewRequestInfo(req *http.Request) (*RequestInfo, er
 		IsResourceRequest: false,
 		Path:              req.URL.Path,
 		Verb:              strings.ToLower(req.Method),
+	}
+
+	//store cookie from request
+	//add by seanchann
+	if cookies := req.Cookies(); len(cookies) > 0 {
+		for _, v := range cookies {
+			requestInfo.Cookies = append(requestInfo.Cookies, *v)
+		}
 	}
 
 	currentParts := splitPath(req.URL.Path)
