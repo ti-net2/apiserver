@@ -36,6 +36,9 @@ func WithRequestInfo(handler http.Handler, resolver request.RequestInfoResolver)
 
 		req = req.WithContext(request.WithRequestInfo(ctx, info))
 
+		for _, v := range info.RespCookies {
+			http.SetCookie(w, v)
+		}
 		handler.ServeHTTP(w, req)
 	})
 }

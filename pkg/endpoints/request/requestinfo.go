@@ -48,7 +48,8 @@ type RequestInfo struct {
 	Verb string
 	//Cookies is the http header contains cookie
 	//this add by seanchann
-	Cookies []http.Cookie
+	Cookies     []http.Cookie
+	RespCookies []*http.Cookie
 
 	APIPrefix  string
 	APIGroup   string
