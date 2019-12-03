@@ -134,6 +134,8 @@ func WriteObjectNegotiated(s runtime.NegotiatedSerializer, restrictions negotiat
 	}
 
 	encoder := s.EncoderForVersion(serializer.Serializer, gv)
+	//seanchann add cookie
+	setCookie(w, req)
 	SerializeObject(serializer.MediaType, encoder, w, req, statusCode, object)
 }
 
@@ -186,4 +188,12 @@ func WriteRawJSON(statusCode int, object interface{}, w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	w.Write(output)
+}
+
+//seanchann add for append cokie header with response
+func setCookie(w http.ResponseWriter, req *http.Request) {
+	requistInfo, _ := request.RequestInfoFrom(req.Context())
+	for _, v := range requistInfo.RespCookies {
+		http.SetCookie(w, v)
+	}
 }
