@@ -177,7 +177,7 @@ func (s *store) Create(ctx context.Context, key string, obj, out runtime.Object,
 	return decode(s.codec, s.versioner, data.Obj, out, 0)
 }
 
-func (s *store) Delete(ctx context.Context, key string, out runtime.Object, preconditions *storage.Preconditions) error {
+func (s *store) Delete(ctx context.Context, key string, out runtime.Object, preconditions *storage.Preconditions, validateDeletion storage.ValidateObjectFunc) error {
 
 	_, err := conversion.EnforcePtr(out)
 	if err != nil {
@@ -209,6 +209,16 @@ func (s *store) Delete(ctx context.Context, key string, out runtime.Object, prec
 
 	if err := decode(s.codec, s.versioner, outData.Obj, out, outData.Revision); err != nil {
 		return storage.NewInternalErrorf(key, err.Error())
+	}
+
+	if preconditions != nil {
+		if err := preconditions.Check(key, out); err != nil {
+			return err
+		}
+	}
+
+	if err := validateDeletion(ctx, out); err != nil {
+		return err
 	}
 
 	query = fmt.Sprintf("id = ? ")
@@ -337,7 +347,7 @@ func (s *store) GetToList(ctx context.Context, key string, resourceVersion strin
 	}
 
 	// update version with cluster level revision
-	return s.versioner.UpdateList(listObj, uint64(0), "")
+	return s.versioner.UpdateList(listObj, uint64(0), "", nil)
 }
 
 type continueToken struct {
@@ -456,8 +466,14 @@ func (s *store) List(ctx context.Context, key string, resourceVersion string, pr
 	if err != nil {
 		return storage.NewInternalErrorf(key, err.Error())
 	}
+
+	if nextSkip != 0 {
+		// continuation
+		c := int64(listCount - skip - limit)
+		return s.versioner.UpdateList(listObj, uint64(0), next, &c)
+	}
 	// no continuation
-	return s.versioner.UpdateList(listObj, uint64(0), next)
+	return s.versioner.UpdateList(listObj, uint64(0), next, nil)
 }
 
 // growSlice takes a slice value and grows its capacity up

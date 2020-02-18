@@ -89,7 +89,7 @@ func (s *store) Create(ctx context.Context, key string, obj, out runtime.Object,
 	return nil
 }
 
-func (s *store) Delete(ctx context.Context, key string, out runtime.Object, preconditions *storage.Preconditions) error {
+func (s *store) Delete(ctx context.Context, key string, out runtime.Object, preconditions *storage.Preconditions, validateDeletion storage.ValidateObjectFunc) error {
 	c, err := GetCollection(s.dbname, s.session, out)
 	if err != nil {
 		return err

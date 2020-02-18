@@ -20,14 +20,14 @@ import (
 	"time"
 
 	// apierrors "k8s.io/apimachinery/pkg/api/errors"
+	_ "github.com/mattn/go-sqlite3"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/storage"
-	utiltrace "k8s.io/utils/trace"
 	"k8s.io/klog"
-	_ "github.com/mattn/go-sqlite3"
+	utiltrace "k8s.io/utils/trace"
 )
 
 type store struct {
@@ -128,7 +128,7 @@ func (s *store) Create(ctx context.Context, key string, obj, out runtime.Object,
 	return decode(s.codec, s.versioner, data.Obj, out, 0)
 }
 
-func (s *store) Delete(ctx context.Context, key string, out runtime.Object, preconditions *storage.Preconditions) error {
+func (s *store) Delete(ctx context.Context, key string, out runtime.Object, preconditions *storage.Preconditions, validateDeletion storage.ValidateObjectFunc) error {
 	_, err := conversion.EnforcePtr(out)
 	if err != nil {
 		panic("unable to convert output object to pointer")
@@ -157,6 +157,16 @@ func (s *store) Delete(ctx context.Context, key string, out runtime.Object, prec
 	}
 	if err := decode(s.codec, s.versioner, outData.Obj, out, outData.Revision); err != nil {
 		return storage.NewInternalErrorf(key, err.Error())
+	}
+
+	if preconditions != nil {
+		if err := preconditions.Check(key, out); err != nil {
+			return err
+		}
+	}
+
+	if err := validateDeletion(ctx, out); err != nil {
+		return err
 	}
 
 	stmt, err := s.client.Prepare(delSQL)
@@ -248,7 +258,7 @@ func (s *store) GetToList(ctx context.Context, key string,
 	}
 
 	// update version with cluster level revision
-	return s.versioner.UpdateList(listObj, uint64(0), "")
+	return s.versioner.UpdateList(listObj, uint64(0), "", nil)
 }
 
 func (s *store) List(ctx context.Context, key string, resourceVersion string,
@@ -287,7 +297,7 @@ func (s *store) List(ctx context.Context, key string, resourceVersion string,
 	}
 
 	// no continuation
-	return s.versioner.UpdateList(listObj, uint64(0), "")
+	return s.versioner.UpdateList(listObj, uint64(0), "", nil)
 }
 
 func (s *store) GuaranteedUpdate(

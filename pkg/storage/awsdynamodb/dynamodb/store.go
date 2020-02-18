@@ -115,7 +115,7 @@ func (s *store) Create(ctx context.Context, key string, obj, out runtime.Object,
 	return decode(s.codec, s.versioner, data, out)
 }
 
-func (s *store) Delete(ctx context.Context, key string, out runtime.Object, preconditions *storage.Preconditions) error {
+func (s *store) Delete(ctx context.Context, key string, out runtime.Object, preconditions *storage.Preconditions, validateDeletion storage.ValidateObjectFunc) error {
 	klog.V(9).Infof("dynamodb delete resource  %v \r\n", key)
 	_, err := s.queryObjByKey(key, out, false)
 	if err != nil {
