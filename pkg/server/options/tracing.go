@@ -17,21 +17,15 @@ limitations under the License.
 package options
 
 import (
-	"context"
 	"fmt"
-	"net"
 
 	"github.com/spf13/pflag"
-	"go.opentelemetry.io/otel/exporters/otlp/otlpgrpc"
-	"go.opentelemetry.io/otel/sdk/resource"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	"go.opentelemetry.io/otel/semconv"
-	"google.golang.org/grpc"
 
 	"k8s.io/apiserver/pkg/server"
 	"k8s.io/apiserver/pkg/server/egressselector"
 	"k8s.io/apiserver/pkg/tracing"
-	"k8s.io/component-base/traces"
+
+	// "k8s.io/component-base/traces"
 	"k8s.io/utils/path"
 )
 
@@ -75,40 +69,41 @@ func (o *TracingOptions) ApplyTo(es *egressselector.EgressSelector, c *server.Co
 		return fmt.Errorf("failed to validate tracing configuration: %v", errs.ToAggregate())
 	}
 
-	opts := []otlpgrpc.Option{}
-	if npConfig.Endpoint != nil {
-		opts = append(opts, otlpgrpc.WithEndpoint(*npConfig.Endpoint))
-	}
-	if es != nil {
-		// Only use the egressselector dialer if egressselector is enabled.
-		// Endpoint is on the "ControlPlane" network
-		egressDialer, err := es.Lookup(egressselector.ControlPlane.AsNetworkContext())
-		if err != nil {
-			return err
-		}
+	// opts := []otlpgrpc.Option{}
+	// if npConfig.Endpoint != nil {
+	// 	opts = append(opts, otlpgrpc.WithEndpoint(*npConfig.Endpoint))
+	// }
+	// if es != nil {
+	// 	// Only use the egressselector dialer if egressselector is enabled.
+	// 	// Endpoint is on the "ControlPlane" network
+	// 	egressDialer, err := es.Lookup(egressselector.ControlPlane.AsNetworkContext())
+	// 	if err != nil {
+	// 		return err
+	// 	}
 
-		otelDialer := func(ctx context.Context, addr string) (net.Conn, error) {
-			return egressDialer(ctx, "tcp", addr)
-		}
-		opts = append(opts, otlpgrpc.WithDialOption(grpc.WithContextDialer(otelDialer)))
-	}
+	// 	otelDialer := func(ctx context.Context, addr string) (net.Conn, error) {
+	// 		return egressDialer(ctx, "tcp", addr)
+	// 	}
+	// 	opts = append(opts, otlpgrpc.WithDialOption(grpc.WithContextDialer(otelDialer)))
+	// }
 
-	sampler := sdktrace.NeverSample()
-	if npConfig.SamplingRatePerMillion != nil && *npConfig.SamplingRatePerMillion > 0 {
-		sampler = sdktrace.TraceIDRatioBased(float64(*npConfig.SamplingRatePerMillion) / float64(1000000))
-	}
+	// sampler := sdktrace.NeverSample()
+	// if npConfig.SamplingRatePerMillion != nil && *npConfig.SamplingRatePerMillion > 0 {
+	// 	sampler = sdktrace.TraceIDRatioBased(float64(*npConfig.SamplingRatePerMillion) / float64(1000000))
+	// }
 
-	resourceOpts := []resource.Option{
-		resource.WithAttributes(
-			semconv.ServiceNameKey.String(apiserverService),
-			semconv.ServiceInstanceIDKey.String(c.APIServerID),
-		),
-	}
-	tp := traces.NewProvider(context.Background(), sampler, resourceOpts, opts...)
-	c.TracerProvider = &tp
-	if c.LoopbackClientConfig != nil {
-		c.LoopbackClientConfig.Wrap(traces.WrapperFor(c.TracerProvider))
-	}
+	// resourceOpts := []resource.Option{
+	// 	resource.WithAttributes(
+	// 		semconv.ServiceNameKey.String(apiserverService),
+	// 		semconv.ServiceInstanceIDKey.String(c.APIServerID),
+	// 	),
+	// }
+	// tp := traces.NewProvider(context.Background(), sampler, resourceOpts, opts...)
+	// tp := traces.NewProvider(context.Background(), sampler, resourceOpts)
+	// c.TracerProvider = &tp
+	// if c.LoopbackClientConfig != nil {
+	// 	c.LoopbackClientConfig.Wrap(traces.WrapperFor(c.TracerProvider))
+	// }
 	return nil
 }
 
