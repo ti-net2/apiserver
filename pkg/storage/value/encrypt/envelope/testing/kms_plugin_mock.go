@@ -1,3 +1,4 @@
+//go:build !windows
 // +build !windows
 
 /*
@@ -35,7 +36,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/wait"
 	kmsapi "k8s.io/apiserver/pkg/storage/value/encrypt/envelope/v1beta1"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 const (

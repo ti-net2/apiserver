@@ -15,13 +15,12 @@ reviewers:
 - liggitt
 - sttts
 - ncdc
-- tallclair
 - enj
 - hzxuzhonghu
-- CaoShuFeng
 - jennybuckley
 - apelisse
 - jpbetz
+- tkashem
 labels:
 - sig/api-machinery
 - area/apiserver

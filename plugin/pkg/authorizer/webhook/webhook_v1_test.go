@@ -34,15 +34,41 @@ import (
 	"text/template"
 	"time"
 
+<<<<<<< HEAD
+<<<<<<< HEAD:plugin/pkg/authorizer/webhook/webhook_v1_test.go
+	authorizationv1 "k8s.io/api/authorization/v1"
+=======
+	authorizationv1beta1 "k8s.io/api/authorization/v1beta1"
+>>>>>>> k8s/release-1.23:plugin/pkg/authorizer/webhook/webhook_v1beta1_test.go
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/diff"
+=======
 	authorizationv1 "k8s.io/api/authorization/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/diff"
+	"k8s.io/apimachinery/pkg/util/wait"
+>>>>>>> k8s/release-1.23
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 	v1 "k8s.io/client-go/tools/clientcmd/api/v1"
 )
 
+<<<<<<< HEAD
+<<<<<<< HEAD:plugin/pkg/authorizer/webhook/webhook_v1_test.go
 func TestV1NewFromConfig(t *testing.T) {
+=======
+func TestV1beta1NewFromConfig(t *testing.T) {
+>>>>>>> k8s/release-1.23:plugin/pkg/authorizer/webhook/webhook_v1beta1_test.go
+=======
+var testRetryBackoff = wait.Backoff{
+	Duration: 5 * time.Millisecond,
+	Factor:   1.5,
+	Jitter:   0.2,
+	Steps:    5,
+}
+
+func TestV1NewFromConfig(t *testing.T) {
+>>>>>>> k8s/release-1.23
 	dir, err := ioutil.TempDir("", "")
 	if err != nil {
 		t.Fatal(err)
@@ -186,11 +212,19 @@ current-context: default
 				return fmt.Errorf("failed to execute test template: %v", err)
 			}
 			// Create a new authorizer
+<<<<<<< HEAD
+<<<<<<< HEAD:plugin/pkg/authorizer/webhook/webhook_v1_test.go
 			sarClient, err := subjectAccessReviewInterfaceFromKubeconfig(p, "v1")
+=======
+			sarClient, err := subjectAccessReviewInterfaceFromKubeconfig(p, "v1beta1", testRetryBackoff, nil)
+>>>>>>> k8s/release-1.23:plugin/pkg/authorizer/webhook/webhook_v1beta1_test.go
+=======
+			sarClient, err := subjectAccessReviewInterfaceFromKubeconfig(p, "v1", testRetryBackoff, nil)
+>>>>>>> k8s/release-1.23
 			if err != nil {
 				return fmt.Errorf("error building sar client: %v", err)
 			}
-			_, err = newWithBackoff(sarClient, 0, 0, 0)
+			_, err = newWithBackoff(sarClient, 0, 0, testRetryBackoff, noopAuthorizerMetrics())
 			return err
 		}()
 		if err != nil && !tt.wantErr {
@@ -202,6 +236,10 @@ current-context: default
 	}
 }
 
+<<<<<<< HEAD
+<<<<<<< HEAD:plugin/pkg/authorizer/webhook/webhook_v1_test.go
+=======
+>>>>>>> k8s/release-1.23
 // V1Service mocks a remote service.
 type V1Service interface {
 	Review(*authorizationv1.SubjectAccessReview)
@@ -210,6 +248,19 @@ type V1Service interface {
 
 // NewV1TestServer wraps a V1Service as an httptest.Server.
 func NewV1TestServer(s V1Service, cert, key, caCert []byte) (*httptest.Server, error) {
+<<<<<<< HEAD
+=======
+// V1beta1Service mocks a remote service.
+type V1beta1Service interface {
+	Review(*authorizationv1beta1.SubjectAccessReview)
+	HTTPStatusCode() int
+}
+
+// NewV1beta1TestServer wraps a V1beta1Service as an httptest.Server.
+func NewV1beta1TestServer(s V1beta1Service, cert, key, caCert []byte) (*httptest.Server, error) {
+>>>>>>> k8s/release-1.23:plugin/pkg/authorizer/webhook/webhook_v1beta1_test.go
+=======
+>>>>>>> k8s/release-1.23
 	const webhookPath = "/testserver"
 	var tlsConfig *tls.Config
 	if cert != nil {
@@ -240,7 +291,15 @@ func NewV1TestServer(s V1Service, cert, key, caCert []byte) (*httptest.Server, e
 			return
 		}
 
+<<<<<<< HEAD
+<<<<<<< HEAD:plugin/pkg/authorizer/webhook/webhook_v1_test.go
 		var review authorizationv1.SubjectAccessReview
+=======
+		var review authorizationv1beta1.SubjectAccessReview
+>>>>>>> k8s/release-1.23:plugin/pkg/authorizer/webhook/webhook_v1beta1_test.go
+=======
+		var review authorizationv1.SubjectAccessReview
+>>>>>>> k8s/release-1.23
 		bodyData, _ := ioutil.ReadAll(r.Body)
 		if err := json.Unmarshal(bodyData, &review); err != nil {
 			http.Error(w, fmt.Sprintf("failed to decode body: %v", err), http.StatusBadRequest)
@@ -267,7 +326,15 @@ func NewV1TestServer(s V1Service, cert, key, caCert []byte) (*httptest.Server, e
 			APIVersion string `json:"apiVersion"`
 			Status     status `json:"status"`
 		}{
+<<<<<<< HEAD
+<<<<<<< HEAD:plugin/pkg/authorizer/webhook/webhook_v1_test.go
 			APIVersion: authorizationv1.SchemeGroupVersion.String(),
+=======
+			APIVersion: authorizationv1beta1.SchemeGroupVersion.String(),
+>>>>>>> k8s/release-1.23:plugin/pkg/authorizer/webhook/webhook_v1beta1_test.go
+=======
+			APIVersion: authorizationv1.SchemeGroupVersion.String(),
+>>>>>>> k8s/release-1.23
 			Status:     status{review.Status.Allowed, review.Status.Reason, review.Status.EvaluationError},
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -287,12 +354,24 @@ func NewV1TestServer(s V1Service, cert, key, caCert []byte) (*httptest.Server, e
 }
 
 // A service that can be set to allow all or deny all authorization requests.
+<<<<<<< HEAD
+<<<<<<< HEAD:plugin/pkg/authorizer/webhook/webhook_v1_test.go
 type mockV1Service struct {
+=======
+type mockV1beta1Service struct {
+>>>>>>> k8s/release-1.23:plugin/pkg/authorizer/webhook/webhook_v1beta1_test.go
+=======
+type mockV1Service struct {
+>>>>>>> k8s/release-1.23
 	allow      bool
 	statusCode int
 	called     int
 }
 
+<<<<<<< HEAD
+<<<<<<< HEAD:plugin/pkg/authorizer/webhook/webhook_v1_test.go
+=======
+>>>>>>> k8s/release-1.23
 func (m *mockV1Service) Review(r *authorizationv1.SubjectAccessReview) {
 	m.called++
 	r.Status.Allowed = m.allow
@@ -303,7 +382,24 @@ func (m *mockV1Service) HTTPStatusCode() int { return m.statusCode }
 
 // newV1Authorizer creates a temporary kubeconfig file from the provided arguments and attempts to load
 // a new WebhookAuthorizer from it.
+<<<<<<< HEAD
 func newV1Authorizer(callbackURL string, clientCert, clientKey, ca []byte, cacheTime time.Duration) (*WebhookAuthorizer, error) {
+=======
+func (m *mockV1beta1Service) Review(r *authorizationv1beta1.SubjectAccessReview) {
+	m.called++
+	r.Status.Allowed = m.allow
+}
+func (m *mockV1beta1Service) Allow()              { m.allow = true }
+func (m *mockV1beta1Service) Deny()               { m.allow = false }
+func (m *mockV1beta1Service) HTTPStatusCode() int { return m.statusCode }
+
+// newV1beta1Authorizer creates a temporary kubeconfig file from the provided arguments and attempts to load
+// a new WebhookAuthorizer from it.
+func newV1beta1Authorizer(callbackURL string, clientCert, clientKey, ca []byte, cacheTime time.Duration) (*WebhookAuthorizer, error) {
+>>>>>>> k8s/release-1.23:plugin/pkg/authorizer/webhook/webhook_v1beta1_test.go
+=======
+func newV1Authorizer(callbackURL string, clientCert, clientKey, ca []byte, cacheTime time.Duration, metrics AuthorizerMetrics) (*WebhookAuthorizer, error) {
+>>>>>>> k8s/release-1.23
 	tempfile, err := ioutil.TempFile("", "")
 	if err != nil {
 		return nil, err
@@ -325,14 +421,33 @@ func newV1Authorizer(callbackURL string, clientCert, clientKey, ca []byte, cache
 	if err := json.NewEncoder(tempfile).Encode(config); err != nil {
 		return nil, err
 	}
+<<<<<<< HEAD
+<<<<<<< HEAD:plugin/pkg/authorizer/webhook/webhook_v1_test.go
 	sarClient, err := subjectAccessReviewInterfaceFromKubeconfig(p, "v1")
+=======
+	sarClient, err := subjectAccessReviewInterfaceFromKubeconfig(p, "v1beta1", testRetryBackoff, nil)
+>>>>>>> k8s/release-1.23:plugin/pkg/authorizer/webhook/webhook_v1beta1_test.go
 	if err != nil {
 		return nil, fmt.Errorf("error building sar client: %v", err)
 	}
-	return newWithBackoff(sarClient, cacheTime, cacheTime, 0)
+	return newWithBackoff(sarClient, cacheTime, cacheTime, testRetryBackoff, noopAuthorizerMetrics())
+}
+
+<<<<<<< HEAD:plugin/pkg/authorizer/webhook/webhook_v1_test.go
+func TestV1TLSConfig(t *testing.T) {
+=======
+func TestV1beta1TLSConfig(t *testing.T) {
+>>>>>>> k8s/release-1.23:plugin/pkg/authorizer/webhook/webhook_v1beta1_test.go
+=======
+	sarClient, err := subjectAccessReviewInterfaceFromKubeconfig(p, "v1", testRetryBackoff, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error building sar client: %v", err)
+	}
+	return newWithBackoff(sarClient, cacheTime, cacheTime, testRetryBackoff, metrics)
 }
 
 func TestV1TLSConfig(t *testing.T) {
+>>>>>>> k8s/release-1.23
 	tests := []struct {
 		test                            string
 		clientCert, clientKey, clientCA []byte
@@ -378,17 +493,38 @@ func TestV1TLSConfig(t *testing.T) {
 	for _, tt := range tests {
 		// Use a closure so defer statements trigger between loop iterations.
 		func() {
+<<<<<<< HEAD
+<<<<<<< HEAD:plugin/pkg/authorizer/webhook/webhook_v1_test.go
+=======
+>>>>>>> k8s/release-1.23
 			service := new(mockV1Service)
 			service.statusCode = 200
 
 			server, err := NewV1TestServer(service, tt.serverCert, tt.serverKey, tt.serverCA)
+<<<<<<< HEAD
+=======
+			service := new(mockV1beta1Service)
+			service.statusCode = 200
+
+			server, err := NewV1beta1TestServer(service, tt.serverCert, tt.serverKey, tt.serverCA)
+>>>>>>> k8s/release-1.23:plugin/pkg/authorizer/webhook/webhook_v1beta1_test.go
+=======
+>>>>>>> k8s/release-1.23
 			if err != nil {
 				t.Errorf("%s: failed to create server: %v", tt.test, err)
 				return
 			}
 			defer server.Close()
 
+<<<<<<< HEAD
+<<<<<<< HEAD:plugin/pkg/authorizer/webhook/webhook_v1_test.go
 			wh, err := newV1Authorizer(server.URL, tt.clientCert, tt.clientKey, tt.clientCA, 0)
+=======
+			wh, err := newV1beta1Authorizer(server.URL, tt.clientCert, tt.clientKey, tt.clientCA, 0)
+>>>>>>> k8s/release-1.23:plugin/pkg/authorizer/webhook/webhook_v1beta1_test.go
+=======
+			wh, err := newV1Authorizer(server.URL, tt.clientCert, tt.clientKey, tt.clientCA, 0, noopAuthorizerMetrics())
+>>>>>>> k8s/release-1.23
 			if err != nil {
 				t.Errorf("%s: failed to create client: %v", tt.test, err)
 				return
@@ -427,6 +563,10 @@ func TestV1TLSConfig(t *testing.T) {
 	}
 }
 
+<<<<<<< HEAD
+<<<<<<< HEAD:plugin/pkg/authorizer/webhook/webhook_v1_test.go
+=======
+>>>>>>> k8s/release-1.23
 // recorderV1Service records all access review requests.
 type recorderV1Service struct {
 	last authorizationv1.SubjectAccessReview
@@ -435,10 +575,27 @@ type recorderV1Service struct {
 
 func (rec *recorderV1Service) Review(r *authorizationv1.SubjectAccessReview) {
 	rec.last = authorizationv1.SubjectAccessReview{}
+<<<<<<< HEAD
+=======
+// recorderV1beta1Service records all access review requests.
+type recorderV1beta1Service struct {
+	last authorizationv1beta1.SubjectAccessReview
+	err  error
+}
+
+func (rec *recorderV1beta1Service) Review(r *authorizationv1beta1.SubjectAccessReview) {
+	rec.last = authorizationv1beta1.SubjectAccessReview{}
+>>>>>>> k8s/release-1.23:plugin/pkg/authorizer/webhook/webhook_v1beta1_test.go
+=======
+>>>>>>> k8s/release-1.23
 	rec.last = *r
 	r.Status.Allowed = true
 }
 
+<<<<<<< HEAD
+<<<<<<< HEAD:plugin/pkg/authorizer/webhook/webhook_v1_test.go
+=======
+>>>>>>> k8s/release-1.23
 func (rec *recorderV1Service) Last() (authorizationv1.SubjectAccessReview, error) {
 	return rec.last, rec.err
 }
@@ -448,12 +605,34 @@ func (rec *recorderV1Service) HTTPStatusCode() int { return 200 }
 func TestV1Webhook(t *testing.T) {
 	serv := new(recorderV1Service)
 	s, err := NewV1TestServer(serv, serverCert, serverKey, caCert)
+<<<<<<< HEAD
+=======
+func (rec *recorderV1beta1Service) Last() (authorizationv1beta1.SubjectAccessReview, error) {
+	return rec.last, rec.err
+}
+
+func (rec *recorderV1beta1Service) HTTPStatusCode() int { return 200 }
+
+func TestV1beta1Webhook(t *testing.T) {
+	serv := new(recorderV1beta1Service)
+	s, err := NewV1beta1TestServer(serv, serverCert, serverKey, caCert)
+>>>>>>> k8s/release-1.23:plugin/pkg/authorizer/webhook/webhook_v1beta1_test.go
+=======
+>>>>>>> k8s/release-1.23
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer s.Close()
 
+<<<<<<< HEAD
+<<<<<<< HEAD:plugin/pkg/authorizer/webhook/webhook_v1_test.go
 	wh, err := newV1Authorizer(s.URL, clientCert, clientKey, caCert, 0)
+=======
+	wh, err := newV1beta1Authorizer(s.URL, clientCert, clientKey, caCert, 0)
+>>>>>>> k8s/release-1.23:plugin/pkg/authorizer/webhook/webhook_v1beta1_test.go
+=======
+	wh, err := newV1Authorizer(s.URL, clientCert, clientKey, caCert, 0, noopAuthorizerMetrics())
+>>>>>>> k8s/release-1.23
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -465,6 +644,10 @@ func TestV1Webhook(t *testing.T) {
 
 	tests := []struct {
 		attr authorizer.Attributes
+<<<<<<< HEAD
+<<<<<<< HEAD:plugin/pkg/authorizer/webhook/webhook_v1_test.go
+=======
+>>>>>>> k8s/release-1.23
 		want authorizationv1.SubjectAccessReview
 	}{
 		{
@@ -473,16 +656,43 @@ func TestV1Webhook(t *testing.T) {
 				TypeMeta: expTypeMeta,
 				Spec: authorizationv1.SubjectAccessReviewSpec{
 					NonResourceAttributes: &authorizationv1.NonResourceAttributes{},
+<<<<<<< HEAD
+=======
+		want authorizationv1beta1.SubjectAccessReview
+	}{
+		{
+			attr: authorizer.AttributesRecord{User: &user.DefaultInfo{}},
+			want: authorizationv1beta1.SubjectAccessReview{
+				TypeMeta: expTypeMeta,
+				Spec: authorizationv1beta1.SubjectAccessReviewSpec{
+					NonResourceAttributes: &authorizationv1beta1.NonResourceAttributes{},
+>>>>>>> k8s/release-1.23:plugin/pkg/authorizer/webhook/webhook_v1beta1_test.go
+=======
+>>>>>>> k8s/release-1.23
 				},
 			},
 		},
 		{
 			attr: authorizer.AttributesRecord{User: &user.DefaultInfo{Name: "jane"}},
+<<<<<<< HEAD
+<<<<<<< HEAD:plugin/pkg/authorizer/webhook/webhook_v1_test.go
+=======
+>>>>>>> k8s/release-1.23
 			want: authorizationv1.SubjectAccessReview{
 				TypeMeta: expTypeMeta,
 				Spec: authorizationv1.SubjectAccessReviewSpec{
 					User:                  "jane",
 					NonResourceAttributes: &authorizationv1.NonResourceAttributes{},
+<<<<<<< HEAD
+=======
+			want: authorizationv1beta1.SubjectAccessReview{
+				TypeMeta: expTypeMeta,
+				Spec: authorizationv1beta1.SubjectAccessReviewSpec{
+					User:                  "jane",
+					NonResourceAttributes: &authorizationv1beta1.NonResourceAttributes{},
+>>>>>>> k8s/release-1.23:plugin/pkg/authorizer/webhook/webhook_v1beta1_test.go
+=======
+>>>>>>> k8s/release-1.23
 				},
 			},
 		},
@@ -503,6 +713,10 @@ func TestV1Webhook(t *testing.T) {
 				ResourceRequest: true,
 				Path:            "/foo",
 			},
+<<<<<<< HEAD
+<<<<<<< HEAD:plugin/pkg/authorizer/webhook/webhook_v1_test.go
+=======
+>>>>>>> k8s/release-1.23
 			want: authorizationv1.SubjectAccessReview{
 				TypeMeta: expTypeMeta,
 				Spec: authorizationv1.SubjectAccessReviewSpec{
@@ -510,6 +724,18 @@ func TestV1Webhook(t *testing.T) {
 					UID:    "1",
 					Groups: []string{"group1", "group2"},
 					ResourceAttributes: &authorizationv1.ResourceAttributes{
+<<<<<<< HEAD
+=======
+			want: authorizationv1beta1.SubjectAccessReview{
+				TypeMeta: expTypeMeta,
+				Spec: authorizationv1beta1.SubjectAccessReviewSpec{
+					User:   "jane",
+					UID:    "1",
+					Groups: []string{"group1", "group2"},
+					ResourceAttributes: &authorizationv1beta1.ResourceAttributes{
+>>>>>>> k8s/release-1.23:plugin/pkg/authorizer/webhook/webhook_v1beta1_test.go
+=======
+>>>>>>> k8s/release-1.23
 						Verb:        "GET",
 						Namespace:   "kittensandponies",
 						Group:       "group3",
@@ -546,16 +772,36 @@ func TestV1Webhook(t *testing.T) {
 
 // TestWebhookCache verifies that error responses from the server are not
 // cached, but successful responses are.
+<<<<<<< HEAD
+<<<<<<< HEAD:plugin/pkg/authorizer/webhook/webhook_v1_test.go
 func TestV1WebhookCache(t *testing.T) {
 	serv := new(mockV1Service)
 	s, err := NewV1TestServer(serv, serverCert, serverKey, caCert)
+=======
+func TestV1beta1WebhookCache(t *testing.T) {
+	serv := new(mockV1beta1Service)
+	s, err := NewV1beta1TestServer(serv, serverCert, serverKey, caCert)
+>>>>>>> k8s/release-1.23:plugin/pkg/authorizer/webhook/webhook_v1beta1_test.go
+=======
+func TestV1WebhookCache(t *testing.T) {
+	serv := new(mockV1Service)
+	s, err := NewV1TestServer(serv, serverCert, serverKey, caCert)
+>>>>>>> k8s/release-1.23
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer s.Close()
 
 	// Create an authorizer that caches successful responses "forever" (100 days).
+<<<<<<< HEAD
+<<<<<<< HEAD:plugin/pkg/authorizer/webhook/webhook_v1_test.go
 	wh, err := newV1Authorizer(s.URL, clientCert, clientKey, caCert, 2400*time.Hour)
+=======
+	wh, err := newV1beta1Authorizer(s.URL, clientCert, clientKey, caCert, 2400*time.Hour)
+>>>>>>> k8s/release-1.23:plugin/pkg/authorizer/webhook/webhook_v1beta1_test.go
+=======
+	wh, err := newV1Authorizer(s.URL, clientCert, clientKey, caCert, 2400*time.Hour, noopAuthorizerMetrics())
+>>>>>>> k8s/release-1.23
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -645,3 +891,13 @@ func TestV1WebhookCache(t *testing.T) {
 		})
 	}
 }
+<<<<<<< HEAD
+=======
+
+func noopAuthorizerMetrics() AuthorizerMetrics {
+	return AuthorizerMetrics{
+		RecordRequestTotal:   noopMetrics{}.RecordRequestTotal,
+		RecordRequestLatency: noopMetrics{}.RecordRequestLatency,
+	}
+}
+>>>>>>> k8s/release-1.23

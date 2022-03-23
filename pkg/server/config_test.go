@@ -19,19 +19,29 @@ package server
 import (
 	"fmt"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/http/httputil"
 	"reflect"
 	"testing"
+	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apimachinery/pkg/util/waitgroup"
+	auditinternal "k8s.io/apiserver/pkg/apis/audit"
+	"k8s.io/apiserver/pkg/audit"
+	"k8s.io/apiserver/pkg/audit/policy"
+	"k8s.io/apiserver/pkg/authentication/authenticator"
+	"k8s.io/apiserver/pkg/authentication/user"
+	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/server/healthz"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest"
+	netutils "k8s.io/utils/net"
 )
 
 func TestAuthorizeClientBearerTokenNoops(t *testing.T) {
@@ -70,7 +80,7 @@ func TestAuthorizeClientBearerTokenNoops(t *testing.T) {
 func TestNewWithDelegate(t *testing.T) {
 	delegateConfig := NewConfig(codecs)
 	delegateConfig.ExternalAddress = "192.168.10.4:443"
-	delegateConfig.PublicAddress = net.ParseIP("192.168.10.4")
+	delegateConfig.PublicAddress = netutils.ParseIPSloppy("192.168.10.4")
 	delegateConfig.LegacyAPIGroupPrefixes = sets.NewString("/api")
 	delegateConfig.LoopbackClientConfig = &rest.Config{}
 	clientset := fake.NewSimpleClientset()
@@ -102,7 +112,7 @@ func TestNewWithDelegate(t *testing.T) {
 
 	wrappingConfig := NewConfig(codecs)
 	wrappingConfig.ExternalAddress = "192.168.10.4:443"
-	wrappingConfig.PublicAddress = net.ParseIP("192.168.10.4")
+	wrappingConfig.PublicAddress = netutils.ParseIPSloppy("192.168.10.4")
 	wrappingConfig.LegacyAPIGroupPrefixes = sets.NewString("/api")
 	wrappingConfig.LoopbackClientConfig = &rest.Config{}
 
@@ -146,6 +156,7 @@ func TestNewWithDelegate(t *testing.T) {
 		"/healthz/ping",
 		"/healthz/poststarthook/delegate-post-start-hook",
 		"/healthz/poststarthook/generic-apiserver-start-informers",
+		"/healthz/poststarthook/max-in-flight-filter",
 		"/healthz/poststarthook/wrapping-post-start-hook",
 		"/healthz/wrapping-health",
 		"/livez",
@@ -154,23 +165,45 @@ func TestNewWithDelegate(t *testing.T) {
 		"/livez/ping",
 		"/livez/poststarthook/delegate-post-start-hook",
 		"/livez/poststarthook/generic-apiserver-start-informers",
+		"/livez/poststarthook/max-in-flight-filter",
 		"/livez/poststarthook/wrapping-post-start-hook",
 		"/metrics",
 		"/readyz",
 		"/readyz/delegate-health",
+		"/readyz/informer-sync",
 		"/readyz/log",
 		"/readyz/ping",
 		"/readyz/poststarthook/delegate-post-start-hook",
 		"/readyz/poststarthook/generic-apiserver-start-informers",
+		"/readyz/poststarthook/max-in-flight-filter",
 		"/readyz/poststarthook/wrapping-post-start-hook",
 		"/readyz/shutdown",
 	}
 	checkExpectedPathsAtRoot(server.URL, expectedPaths, t)
+
+	// wait for health (max-in-flight-filter is initialized asynchronously, can take a few milliseconds to initialize)
+	if err := wait.PollImmediate(100*time.Millisecond, wait.ForeverTestTimeout, func() (bool, error) {
+		// healthz checks are installed in PrepareRun
+		resp, err := http.Get(server.URL + "/healthz?exclude=wrapping-health&exclude=delegate-health")
+		if err != nil {
+			t.Fatal(err)
+		}
+		data, _ := ioutil.ReadAll(resp.Body)
+		if http.StatusOK != resp.StatusCode {
+			t.Logf("got %d", resp.StatusCode)
+			t.Log(string(data))
+			return false, nil
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
 	checkPath(server.URL+"/healthz", http.StatusInternalServerError, `[+]ping ok
 [+]log ok
 [-]wrapping-health failed: reason withheld
 [-]delegate-health failed: reason withheld
 [+]poststarthook/generic-apiserver-start-informers ok
+[+]poststarthook/max-in-flight-filter ok
 [+]poststarthook/delegate-post-start-hook ok
 [+]poststarthook/wrapping-post-start-hook ok
 healthz check failed
@@ -233,11 +266,93 @@ func checkExpectedPathsAtRoot(url string, expectedPaths []string, t *testing.T) 
 			pathset.Insert(p.(string))
 		}
 		expectedset := sets.NewString(expectedPaths...)
-		for _, p := range pathset.Difference(expectedset) {
+		for p := range pathset.Difference(expectedset) {
 			t.Errorf("Got %v path, which we did not expect", p)
 		}
-		for _, p := range expectedset.Difference(pathset) {
+		for p := range expectedset.Difference(pathset) {
 			t.Errorf(" Expected %v path which we did not get", p)
 		}
 	})
+}
+
+func TestAuthenticationAuditAnnotationsDefaultChain(t *testing.T) {
+	authn := authenticator.RequestFunc(func(req *http.Request) (*authenticator.Response, bool, error) {
+		// confirm that we can set an audit annotation in a handler before WithAudit
+		audit.AddAuditAnnotation(req.Context(), "pandas", "are awesome")
+
+		// confirm that trying to use the audit event directly would never work
+		if ae := audit.AuditEventFrom(req.Context()); ae != nil {
+			t.Errorf("expected nil audit event, got %v", ae)
+		}
+
+		return &authenticator.Response{User: &user.DefaultInfo{}}, true, nil
+	})
+	backend := &testBackend{}
+	c := &Config{
+		Authentication:           AuthenticationInfo{Authenticator: authn},
+		AuditBackend:             backend,
+		AuditPolicyRuleEvaluator: policy.NewFakePolicyRuleEvaluator(auditinternal.LevelMetadata, nil),
+
+		// avoid nil panics
+		HandlerChainWaitGroup: &waitgroup.SafeWaitGroup{},
+		RequestInfoResolver:   &request.RequestInfoFactory{},
+		RequestTimeout:        10 * time.Second,
+		LongRunningFunc:       func(_ *http.Request, _ *request.RequestInfo) bool { return false },
+		lifecycleSignals:      newLifecycleSignals(),
+	}
+
+	h := DefaultBuildHandlerChain(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// confirm this is a no-op
+		if r.Context() != audit.WithAuditAnnotations(r.Context()) {
+			t.Error("unexpected double wrapping of context")
+		}
+
+		// confirm that we have an audit event
+		ae := audit.AuditEventFrom(r.Context())
+		if ae == nil {
+			t.Error("unexpected nil audit event")
+		}
+
+		// confirm that the direct way of setting audit annotations later in the chain works as expected
+		audit.LogAnnotation(ae, "snorlax", "is cool too")
+
+		// confirm that the indirect way of setting audit annotations later in the chain also works
+		audit.AddAuditAnnotation(r.Context(), "dogs", "are okay")
+
+		if _, err := w.Write([]byte("done")); err != nil {
+			t.Errorf("failed to write response: %v", err)
+		}
+	}), c)
+	w := httptest.NewRecorder()
+
+	h.ServeHTTP(w, httptest.NewRequest("GET", "https://ignored.com", nil))
+
+	r := w.Result()
+	if ok := r.StatusCode == http.StatusOK && w.Body.String() == "done" && len(r.Header.Get(auditinternal.HeaderAuditID)) > 0; !ok {
+		t.Errorf("invalid response: %#v", w)
+	}
+	if len(backend.events) == 0 {
+		t.Error("expected audit events, got none")
+	}
+	// these should all be the same because the handler chain mutates the event in place
+	want := map[string]string{"pandas": "are awesome", "snorlax": "is cool too", "dogs": "are okay"}
+	for _, event := range backend.events {
+		if event.Stage != auditinternal.StageResponseComplete {
+			t.Errorf("expected event stage to be complete, got: %s", event.Stage)
+		}
+		if diff := cmp.Diff(want, event.Annotations); diff != "" {
+			t.Errorf("event has unexpected annotations (-want +got): %s", diff)
+		}
+	}
+}
+
+type testBackend struct {
+	events []*auditinternal.Event
+
+	audit.Backend // nil panic if anything other than ProcessEvents called
+}
+
+func (b *testBackend) ProcessEvents(events ...*auditinternal.Event) bool {
+	b.events = append(b.events, events...)
+	return true
 }

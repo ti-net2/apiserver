@@ -31,6 +31,8 @@ import (
 	"testing"
 	"time"
 
+	netutils "k8s.io/utils/net"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -61,6 +63,20 @@ func TestBuiltNamedCertificates(t *testing.T) {
 				{
 					testCertSpec: testCertSpec{
 						host: "test.com",
+					},
+				},
+			},
+			expected: map[string]int{
+				"test.com": 0,
+			},
+		},
+		{
+			// ip as cns are ignored
+			certs: []namedtestCertSpec{
+				{
+					testCertSpec: testCertSpec{
+						host:  "1.2.3.4",
+						names: []string{"test.com"},
 					},
 				},
 			},
@@ -232,7 +248,7 @@ NextTest:
 func parseIPList(ips []string) []net.IP {
 	var netIPs []net.IP
 	for _, ip := range ips {
-		netIPs = append(netIPs, net.ParseIP(ip))
+		netIPs = append(netIPs, netutils.ParseIPSloppy(ip))
 	}
 	return netIPs
 }
@@ -288,7 +304,7 @@ func generateSelfSignedCertKey(host string, alternateIPs []net.IP, alternateDNS 
 		IsCA:                  true,
 	}
 
-	if ip := net.ParseIP(host); ip != nil {
+	if ip := netutils.ParseIPSloppy(host); ip != nil {
 		template.IPAddresses = append(template.IPAddresses, ip)
 	} else {
 		template.DNSNames = append(template.DNSNames, host)

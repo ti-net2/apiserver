@@ -16,27 +16,19 @@ limitations under the License.
 
 package promise
 
-// Mutable is a variable that is initially not set and can be set one
-// or more times (unlike a traditional "promise", which can be written
-// only once).
-type Mutable interface {
-
-	// Set writes a value into this variable and unblocks every
-	// goroutine waiting for this variable to have a value
-	Set(interface{})
-
-	// Get reads the value of this variable.  If this variable is
-	// not set yet then this call blocks until this variable gets a value.
+// WriteOnce represents a variable that is initially not set and can
+// be set once and is readable.  This is the common meaning for
+// "promise".
+type WriteOnce interface {
+	// Get reads the current value of this variable.  If this
+	// variable is not set yet then this call blocks until this
+	// variable gets a value.
 	Get() interface{}
-}
 
-// LockingMutable is a Mutable whose implementation is protected by a lock
-type LockingMutable interface {
-	Mutable
-
-	// SetLocked is like Set but the caller must already hold the lock
-	SetLocked(interface{})
-
-	// GetLocked is like Get but the caller must already hold the lock
-	GetLocked() interface{}
+	// Set normally writes a value into this variable, unblocks every
+	// goroutine waiting for this variable to have a value, and
+	// returns true.  In the unhappy case that this variable is
+	// already set, this method returns false without modifying the
+	// variable's value.
+	Set(interface{}) bool
 }

@@ -19,7 +19,10 @@ package testing
 import (
 	"context"
 
+	"k8s.io/apiserver/pkg/util/flowcontrol/debug"
 	fq "k8s.io/apiserver/pkg/util/flowcontrol/fairqueuing"
+	"k8s.io/apiserver/pkg/util/flowcontrol/metrics"
+	fcrequest "k8s.io/apiserver/pkg/util/flowcontrol/request"
 )
 
 // NewNoRestraintFactory makes a QueueSetFactory that produces
@@ -31,19 +34,40 @@ func NewNoRestraintFactory() fq.QueueSetFactory {
 
 type noRestraintFactory struct{}
 
-func (noRestraintFactory) NewQueueSet(config fq.QueueSetConfig) (fq.QueueSet, error) {
-	return noRestraint{}, nil
-}
+type noRestraintCompleter struct{}
 
 type noRestraint struct{}
 
-func (noRestraint) SetConfiguration(config fq.QueueSetConfig) error {
-	return nil
+type noRestraintRequest struct{}
+
+func (noRestraintFactory) BeginConstruction(fq.QueuingConfig, metrics.RatioedChangeObserverPair, metrics.RatioedChangeObserver) (fq.QueueSetCompleter, error) {
+	return noRestraintCompleter{}, nil
 }
 
-func (noRestraint) Quiesce(fq.EmptyHandler) {
+func (noRestraintCompleter) Complete(dCfg fq.DispatchingConfig) fq.QueueSet {
+	return noRestraint{}
 }
 
-func (noRestraint) Wait(ctx context.Context, hashValue uint64, descr1, descr2 interface{}) (quiescent, execute bool, afterExecution func()) {
-	return false, true, func() {}
+func (noRestraint) BeginConfigChange(qCfg fq.QueuingConfig) (fq.QueueSetCompleter, error) {
+	return noRestraintCompleter{}, nil
+}
+
+func (noRestraint) IsIdle() bool {
+	return false
+}
+
+func (noRestraint) StartRequest(ctx context.Context, workEstimate *fcrequest.WorkEstimate, hashValue uint64, flowDistinguisher, fsName string, descr1, descr2 interface{}, queueNoteFn fq.QueueNoteFn) (fq.Request, bool) {
+	return noRestraintRequest{}, false
+}
+
+func (noRestraint) UpdateObservations() {
+}
+
+func (noRestraint) Dump(bool) debug.QueueSetDump {
+	return debug.QueueSetDump{}
+}
+
+func (noRestraintRequest) Finish(execute func()) (idle bool) {
+	execute()
+	return false
 }

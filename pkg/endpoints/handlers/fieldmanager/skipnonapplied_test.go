@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package fieldmanager_test
+package fieldmanager
 
 import (
 	"strings"
@@ -25,7 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apiserver/pkg/endpoints/handlers/fieldmanager"
+	"sigs.k8s.io/yaml"
 )
 
 type fakeObjectCreater struct {
@@ -42,14 +42,16 @@ func (f *fakeObjectCreater) New(_ schema.GroupVersionKind) (runtime.Object, erro
 }
 
 func TestNoUpdateBeforeFirstApply(t *testing.T) {
-	f := NewTestFieldManager(schema.FromAPIVersionAndKind("v1", "Pod"))
-	f.fieldManager = fieldmanager.NewSkipNonAppliedManager(
-		f.fieldManager,
-		&fakeObjectCreater{gvk: schema.GroupVersionKind{Version: "v1", Kind: "Pod"}},
-		schema.GroupVersionKind{},
-	)
+	f := NewTestFieldManager(schema.FromAPIVersionAndKind("v1", "Pod"), "", func(m Manager) Manager {
+		return NewSkipNonAppliedManager(
+			m,
+			&fakeObjectCreater{gvk: schema.GroupVersionKind{Version: "v1", Kind: "Pod"}},
+			schema.GroupVersionKind{},
+		)
+	})
 
-	if err := f.Apply([]byte(`{
+	appliedObj := &unstructured.Unstructured{Object: map[string]interface{}{}}
+	if err := yaml.Unmarshal([]byte(`{
 		"apiVersion": "v1",
 		"kind": "Pod",
 		"metadata": {
@@ -62,7 +64,11 @@ func TestNoUpdateBeforeFirstApply(t *testing.T) {
 				"image": "nginx:latest"
 			}]
         }
-	}`), "fieldmanager_test_apply", false); err != nil {
+	}`), &appliedObj.Object); err != nil {
+		t.Fatalf("error decoding YAML: %v", err)
+	}
+
+	if err := f.Apply(appliedObj, "fieldmanager_test_apply", false); err != nil {
 		t.Fatalf("failed to update object: %v", err)
 	}
 
@@ -76,12 +82,13 @@ func TestNoUpdateBeforeFirstApply(t *testing.T) {
 }
 
 func TestUpdateBeforeFirstApply(t *testing.T) {
-	f := NewTestFieldManager(schema.FromAPIVersionAndKind("v1", "Pod"))
-	f.fieldManager = fieldmanager.NewSkipNonAppliedManager(
-		f.fieldManager,
-		&fakeObjectCreater{gvk: schema.GroupVersionKind{Version: "v1", Kind: "Pod"}},
-		schema.GroupVersionKind{},
-	)
+	f := NewTestFieldManager(schema.FromAPIVersionAndKind("v1", "Pod"), "", func(m Manager) Manager {
+		return NewSkipNonAppliedManager(
+			m,
+			&fakeObjectCreater{gvk: schema.GroupVersionKind{Version: "v1", Kind: "Pod"}},
+			schema.GroupVersionKind{},
+		)
+	})
 
 	updatedObj := &corev1.Pod{}
 	updatedObj.Kind = "Pod"
@@ -96,7 +103,8 @@ func TestUpdateBeforeFirstApply(t *testing.T) {
 		t.Fatalf("managedFields were tracked on update only: %v", m)
 	}
 
-	appliedBytes := []byte(`{
+	appliedObj := &unstructured.Unstructured{Object: map[string]interface{}{}}
+	if err := yaml.Unmarshal([]byte(`{
 		"apiVersion": "v1",
 		"kind": "Pod",
 		"metadata": {
@@ -109,9 +117,11 @@ func TestUpdateBeforeFirstApply(t *testing.T) {
 				"image": "nginx:latest"
 			}]
         }
-	}`)
+	}`), &appliedObj.Object); err != nil {
+		t.Fatalf("error decoding YAML: %v", err)
+	}
 
-	err := f.Apply(appliedBytes, "fieldmanager_test_apply", false)
+	err := f.Apply(appliedObj, "fieldmanager_test_apply", false)
 	apiStatus, _ := err.(apierrors.APIStatus)
 	if err == nil || !apierrors.IsConflict(err) || len(apiStatus.Status().Details.Causes) != 1 {
 		t.Fatalf("Expecting to get one conflict but got %v", err)
@@ -125,7 +135,7 @@ func TestUpdateBeforeFirstApply(t *testing.T) {
 		t.Fatalf("Expecting conflict message to contain %q but got %q: %v", e, a, err)
 	}
 
-	if err := f.Apply(appliedBytes, "fieldmanager_test_apply", true); err != nil {
+	if err := f.Apply(appliedObj, "fieldmanager_test_apply", true); err != nil {
 		t.Fatalf("failed to update object: %v", err)
 	}
 
