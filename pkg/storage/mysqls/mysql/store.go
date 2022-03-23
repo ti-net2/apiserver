@@ -107,7 +107,7 @@ func (s *store) createTable(table string) {
 	s.client.Exec(sql)
 }
 
-func (s *store) Get(ctx context.Context, key string, resourceVersion string, out runtime.Object, ignoreNotFound bool) error {
+func (s *store) Get(ctx context.Context, key string, opts storage.GetOptions, out runtime.Object) error {
 	reqMeta := extractKey(ctx, key)
 	kind := reqMeta.Kind
 	resource := reqMeta.Resource
@@ -126,7 +126,7 @@ func (s *store) Get(ctx context.Context, key string, resourceVersion string, out
 	err := s.client.Table(kind).Where(query, queryArgs...).Limit(1).Find(outData).Error
 	if err != nil {
 		if dbmysql.IsRecordNotFoundError(err) {
-			if ignoreNotFound {
+			if opts.IgnoreNotFound {
 				return runtime.SetZeroValue(out)
 			}
 			return storage.NewKeyNotFoundError(key, 0)
@@ -177,7 +177,9 @@ func (s *store) Create(ctx context.Context, key string, obj, out runtime.Object,
 	return decode(s.codec, s.versioner, data.Obj, out, 0)
 }
 
-func (s *store) Delete(ctx context.Context, key string, out runtime.Object, preconditions *storage.Preconditions, validateDeletion storage.ValidateObjectFunc) error {
+func (s *store) Delete(
+	ctx context.Context, key string, out runtime.Object, preconditions *storage.Preconditions,
+	validateDeletion storage.ValidateObjectFunc, cachedExistingObject runtime.Object) error {
 
 	_, err := conversion.EnforcePtr(out)
 	if err != nil {
@@ -234,7 +236,7 @@ func (s *store) Delete(ctx context.Context, key string, out runtime.Object, prec
 // GuaranteedUpdate implements storage.Interface.GuaranteedUpdate.
 func (s *store) GuaranteedUpdate(
 	ctx context.Context, key string, out runtime.Object, ignoreNotFound bool,
-	preconditions *storage.Preconditions, tryUpdate storage.UpdateFunc, suggestion ...runtime.Object) error {
+	preconditions *storage.Preconditions, tryUpdate storage.UpdateFunc, cachedExistingObject runtime.Object) error {
 	trace := utiltrace.New(fmt.Sprintf("GuaranteedUpdate etcd3: %s", reflect.TypeOf(out).String()))
 	defer trace.LogIfLong(500 * time.Millisecond)
 
@@ -314,7 +316,7 @@ func (s *store) GuaranteedUpdate(
 	return decode(s.codec, s.versioner, updateOutData.Obj, out, 0)
 }
 
-func (s *store) GetToList(ctx context.Context, key string, resourceVersion string, pred storage.SelectionPredicate, listObj runtime.Object) error {
+func (s *store) GetToList(ctx context.Context, key string, opts storage.ListOptions, listObj runtime.Object) error {
 
 	listPtr, err := meta.GetItemsPtr(listObj)
 	if err != nil {
@@ -331,17 +333,17 @@ func (s *store) GetToList(ctx context.Context, key string, resourceVersion strin
 		return storage.NewKeyNotFoundError(key, 0)
 	}
 
-	klog.Infof("Call GetToList key %v pred %v ctx %v", key, pred, ctx)
+	klog.Infof("Call GetToList key %v pred %v ctx %v", key, opts.Predicate, ctx)
 
 	data := []dataModel{}
 	dbHandle := s.client.Table(kind)
-	dbHandle = selectionWithFields(dbHandle, pred, true)
+	dbHandle = selectionWithFields(dbHandle, opts.Predicate, true)
 	if err := dbHandle.Limit(1).Find(&data).Error; err != nil {
 		return storage.NewInternalErrorf(key, err.Error())
 	}
 
 	if len(data) > 0 {
-		if err := appendListItem(v, data[0].Obj, uint64(0), pred, s.codec, s.versioner); err != nil {
+		if err := appendListItem(v, data[0].Obj, uint64(0), opts.Predicate, s.codec, s.versioner); err != nil {
 			return err
 		}
 	}
@@ -379,7 +381,8 @@ func encodeContinue(start, total uint64, resourceVersion int64) (string, error) 
 	return base64.RawURLEncoding.EncodeToString(out), nil
 }
 
-func (s *store) List(ctx context.Context, key string, resourceVersion string, pred storage.SelectionPredicate, listObj runtime.Object) error {
+func (s *store) List(ctx context.Context, key string,
+	opts storage.ListOptions, listObj runtime.Object) error {
 	listPtr, err := meta.GetItemsPtr(listObj)
 	if err != nil {
 		return err
@@ -408,7 +411,7 @@ func (s *store) List(ctx context.Context, key string, resourceVersion string, pr
 		queryArgs := []interface{}{reqMeta.Namespace}
 		dbHandle = dbHandle.Where(query, queryArgs...)
 	}
-	dbHandle = selectionWithFields(dbHandle, pred, true)
+	dbHandle = selectionWithFields(dbHandle, opts.Predicate, true)
 
 	//first get list count by selection
 	var listCount uint64
@@ -422,17 +425,17 @@ func (s *store) List(ctx context.Context, key string, resourceVersion string, pr
 	var nextSkip uint64
 	var limit uint64
 
-	if len(pred.Continue) > 0 {
+	if len(opts.Predicate.Continue) > 0 {
 		//continue
-		skip, err = decodeContinue(pred.Continue)
+		skip, err = decodeContinue(opts.Predicate.Continue)
 		if err != nil {
 			return apierrors.NewBadRequest(fmt.Sprintf("invalid continue token: %v", err))
 		}
 	}
 
-	if pred.Limit > 0 {
+	if opts.Predicate.Limit > 0 {
 		//first resource
-		limit = uint64(pred.Limit)
+		limit = uint64(opts.Predicate.Limit)
 	} else {
 		limit = uint64(s.listDefaultLimit)
 	}
@@ -446,7 +449,7 @@ func (s *store) List(ctx context.Context, key string, resourceVersion string, pr
 		dbHandle = dbHandle.Offset(skip)
 	}
 
-	klog.V(3).Infof("input pred %+v current limit %v skip %v", pred, limit, skip)
+	klog.V(3).Infof("input pred %+v current limit %v skip %v", opts.Predicate, limit, skip)
 	if err := dbHandle.Find(&data).Error; err != nil {
 		return storage.NewInternalErrorf(key, err.Error())
 	}
@@ -457,7 +460,7 @@ func (s *store) List(ctx context.Context, key string, resourceVersion string, pr
 	growSlice(v, 2048, int(limit))
 
 	for _, dataVal := range data {
-		if err := appendListItem(v, dataVal.Obj, uint64(0), pred, s.codec, s.versioner); err != nil {
+		if err := appendListItem(v, dataVal.Obj, uint64(0), opts.Predicate, s.codec, s.versioner); err != nil {
 			return err
 		}
 	}
@@ -577,11 +580,11 @@ func (s *store) Count(key string) (int64, error) {
 	return int64(count), nil
 }
 
-func (s *store) Watch(ctx context.Context, key string, resourceVersion string, p storage.SelectionPredicate) (watch.Interface, error) {
+func (s *store) Watch(ctx context.Context, key string, opts storage.ListOptions) (watch.Interface, error) {
 	return nil, storage.NewInternalError(fmt.Sprintf("the backend of mysql not support watch"))
 }
 
-func (s *store) WatchList(ctx context.Context, key string, resourceVersion string, p storage.SelectionPredicate) (watch.Interface, error) {
+func (s *store) WatchList(ctx context.Context, key string, opts storage.ListOptions) (watch.Interface, error) {
 	return nil, storage.NewInternalError(fmt.Sprintf("the backend of mysql not support watch"))
 }
 

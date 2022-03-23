@@ -128,7 +128,9 @@ func (s *store) Create(ctx context.Context, key string, obj, out runtime.Object,
 	return decode(s.codec, s.versioner, data.Obj, out, 0)
 }
 
-func (s *store) Delete(ctx context.Context, key string, out runtime.Object, preconditions *storage.Preconditions, validateDeletion storage.ValidateObjectFunc) error {
+func (s *store) Delete(
+	ctx context.Context, key string, out runtime.Object, preconditions *storage.Preconditions,
+	validateDeletion storage.ValidateObjectFunc, cachedExistingObject runtime.Object) error {
 	_, err := conversion.EnforcePtr(out)
 	if err != nil {
 		panic("unable to convert output object to pointer")
@@ -183,17 +185,16 @@ func (s *store) Delete(ctx context.Context, key string, out runtime.Object, prec
 	return nil
 }
 
-func (s *store) Watch(ctx context.Context, key string, resourceVersion string, p storage.SelectionPredicate) (watch.Interface, error) {
+func (s *store) Watch(ctx context.Context, key string, opts storage.ListOptions) (watch.Interface, error) {
 	return nil, storage.NewInternalError(fmt.Sprintf("the backend of mysql not support watch"))
 }
 
-func (s *store) WatchList(ctx context.Context, key string,
-	resourceVersion string, p storage.SelectionPredicate) (watch.Interface, error) {
+func (s *store) WatchList(ctx context.Context, key string, opts storage.ListOptions) (watch.Interface, error) {
 	return nil, storage.NewInternalError(fmt.Sprintf("the backend of mysql not support watch"))
 }
 
-func (s *store) Get(ctx context.Context, key string, resourceVersion string,
-	out runtime.Object, ignoreNotFound bool) error {
+func (s *store) Get(ctx context.Context, key string, opts storage.GetOptions,
+	out runtime.Object) error {
 
 	stmt, err := s.client.Prepare(getSQL)
 	if err != nil {
@@ -221,7 +222,7 @@ func (s *store) Get(ctx context.Context, key string, resourceVersion string,
 }
 
 func (s *store) GetToList(ctx context.Context, key string,
-	resourceVersion string, pred storage.SelectionPredicate, listObj runtime.Object) error {
+	opts storage.ListOptions, listObj runtime.Object) error {
 
 	listPtr, err := meta.GetItemsPtr(listObj)
 	if err != nil {
@@ -250,7 +251,7 @@ func (s *store) GetToList(ctx context.Context, key string,
 		if err != nil {
 			return storage.NewInternalErrorf(key, err.Error())
 		}
-		if err := appendListItem(v, item.Obj, uint64(0), pred, s.codec, s.versioner); err != nil {
+		if err := appendListItem(v, item.Obj, uint64(0), opts.Predicate, s.codec, s.versioner); err != nil {
 			return err
 		}
 
@@ -261,8 +262,8 @@ func (s *store) GetToList(ctx context.Context, key string,
 	return s.versioner.UpdateList(listObj, uint64(0), "", nil)
 }
 
-func (s *store) List(ctx context.Context, key string, resourceVersion string,
-	pred storage.SelectionPredicate, listObj runtime.Object) error {
+func (s *store) List(ctx context.Context, key string,
+	opts storage.ListOptions, listObj runtime.Object) error {
 
 	listPtr, err := meta.GetItemsPtr(listObj)
 	if err != nil {
@@ -291,7 +292,7 @@ func (s *store) List(ctx context.Context, key string, resourceVersion string,
 		if err != nil {
 			return storage.NewInternalErrorf(key, err.Error())
 		}
-		if err := appendListItem(v, item.Obj, uint64(0), pred, s.codec, s.versioner); err != nil {
+		if err := appendListItem(v, item.Obj, uint64(0), opts.Predicate, s.codec, s.versioner); err != nil {
 			return err
 		}
 	}
@@ -302,7 +303,7 @@ func (s *store) List(ctx context.Context, key string, resourceVersion string,
 
 func (s *store) GuaranteedUpdate(
 	ctx context.Context, key string, out runtime.Object, ignoreNotFound bool,
-	precondtions *storage.Preconditions, tryUpdate storage.UpdateFunc, suggestion ...runtime.Object) error {
+	precondtions *storage.Preconditions, tryUpdate storage.UpdateFunc, cachedExistingObject runtime.Object) error {
 
 	trace := utiltrace.New(fmt.Sprintf("GuaranteedUpdate sqlite: %s", reflect.TypeOf(out).String()))
 	defer trace.LogIfLong(500 * time.Millisecond)

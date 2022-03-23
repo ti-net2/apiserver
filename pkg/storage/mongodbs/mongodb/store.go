@@ -89,7 +89,9 @@ func (s *store) Create(ctx context.Context, key string, obj, out runtime.Object,
 	return nil
 }
 
-func (s *store) Delete(ctx context.Context, key string, out runtime.Object, preconditions *storage.Preconditions, validateDeletion storage.ValidateObjectFunc) error {
+func (s *store) Delete(
+	ctx context.Context, key string, out runtime.Object, preconditions *storage.Preconditions,
+	validateDeletion storage.ValidateObjectFunc, cachedExistingObject runtime.Object) error {
 	c, err := GetCollection(s.dbname, s.session, out)
 	if err != nil {
 		return err
@@ -114,7 +116,7 @@ func (s *store) Delete(ctx context.Context, key string, out runtime.Object, prec
 	return nil
 }
 
-func (s *store) Get(ctx context.Context, key string, resourceVersion string, out runtime.Object, ignoreNotFound bool) error {
+func (s *store) Get(ctx context.Context, key string, opts storage.GetOptions, out runtime.Object) error {
 
 	c, err := GetCollection(s.dbname, s.session, out)
 	if err != nil {
@@ -126,10 +128,10 @@ func (s *store) Get(ctx context.Context, key string, resourceVersion string, out
 		return storage.NewInternalErrorf("key %v, object can't convent into collection", key)
 	}
 
-	return s.getObject(meta, key, out, ignoreNotFound)
+	return s.getObject(meta, key, out, opts.IgnoreNotFound)
 }
 
-func (s *store) GetToList(ctx context.Context, key string, resourceVersion string, p storage.SelectionPredicate, listObj runtime.Object) error {
+func (s *store) GetToList(ctx context.Context, key string, opts storage.ListOptions, listObj runtime.Object) error {
 	listPtr, itemPtrObj, err := GetListItemObj(listObj)
 	if err != nil {
 		return storage.NewInvalidObjError(key, err.Error())
@@ -148,7 +150,7 @@ func (s *store) GetToList(ctx context.Context, key string, resourceVersion strin
 	//query  document in collection
 	query := &client.QueryMetaData{}
 	query.Condition = bson.M{}
-	Condition(meta, query, p)
+	Condition(meta, query, opts.Predicate)
 
 	var result []*DocObject
 	err = client.MongoNormalQuery(meta, query, &result)
@@ -160,19 +162,21 @@ func (s *store) GetToList(ctx context.Context, key string, resourceVersion strin
 	return decodeList(result, listPtr, s.codec, s.versioner)
 }
 
-func (s *store) List(ctx context.Context, key string, resourceVersion string, p storage.SelectionPredicate, listObj runtime.Object) error {
-	return s.GetToList(ctx, key, resourceVersion, p, listObj)
+func (s *store) List(ctx context.Context, key string, opts storage.ListOptions, listObj runtime.Object) error {
+	return s.GetToList(ctx, key, opts, listObj)
 }
 
-func (s *store) Watch(ctx context.Context, key string, resourceVersion string, p storage.SelectionPredicate) (watch.Interface, error) {
+func (s *store) Watch(ctx context.Context, key string, opts storage.ListOptions) (watch.Interface, error) {
 	return nil, storage.NewInternalError(fmt.Sprintf("the backend of mysql not support wath"))
 }
 
-func (s *store) WatchList(ctx context.Context, key string, resourceVersion string, p storage.SelectionPredicate) (watch.Interface, error) {
+func (s *store) WatchList(ctx context.Context, key string, opts storage.ListOptions) (watch.Interface, error) {
 	return nil, storage.NewInternalError(fmt.Sprintf("the backend of mysql not support wath"))
 }
 
-func (s *store) GuaranteedUpdate(ctx context.Context, key string, out runtime.Object, ignoreNotFound bool, precondtions *storage.Preconditions, tryUpdate storage.UpdateFunc, suggestion ...runtime.Object) error {
+func (s *store) GuaranteedUpdate(ctx context.Context,
+	key string, out runtime.Object, ignoreNotFound bool, precondtions *storage.Preconditions,
+	tryUpdate storage.UpdateFunc, cachedExistingObject runtime.Object) error {
 
 	c, err := GetCollection(s.dbname, s.session, out)
 	if err != nil {
