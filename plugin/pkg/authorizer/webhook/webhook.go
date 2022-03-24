@@ -366,20 +366,6 @@ func (t *subjectAccessReviewV1beta1ClientGW) Create(ctx context.Context, subject
 	return subjectAccessReview, statusCode, err
 }
 
-type subjectAccessReviewV1beta1Client struct {
-	w *webhook.GenericWebhook
-}
-
-func (t *subjectAccessReviewV1beta1Client) CreateContext(ctx context.Context, subjectAccessReview *authorizationv1.SubjectAccessReview) (*authorizationv1.SubjectAccessReview, error) {
-	v1beta1Review := &authorizationv1beta1.SubjectAccessReview{Spec: v1SpecToV1beta1Spec(&subjectAccessReview.Spec)}
-	v1beta1Result := &authorizationv1beta1.SubjectAccessReview{}
-	err := t.w.RestClient.Post().Context(ctx).Body(v1beta1Review).Do().Into(v1beta1Result)
-	if err == nil {
-		subjectAccessReview.Status = v1beta1StatusToV1Status(&v1beta1Result.Status)
-	}
-	return subjectAccessReview, err
-}
-
 // shouldCache determines whether it is safe to cache the given request attributes. If the
 // requester-controlled attributes are too large, this may be a DoS attempt, so we skip the cache.
 func shouldCache(attr authorizer.Attributes) bool {

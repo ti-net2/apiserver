@@ -115,7 +115,9 @@ func (s *store) Create(ctx context.Context, key string, obj, out runtime.Object,
 	return decode(s.codec, s.versioner, data, out)
 }
 
-func (s *store) Delete(ctx context.Context, key string, out runtime.Object, preconditions *storage.Preconditions, validateDeletion storage.ValidateObjectFunc) error {
+func (s *store) Delete(ctx context.Context, key string,
+	out runtime.Object, preconditions *storage.Preconditions,
+	validateDeletion storage.ValidateObjectFunc, cachedExistingObject runtime.Object) error {
 	klog.V(9).Infof("dynamodb delete resource  %v \r\n", key)
 	_, err := s.queryObjByKey(key, out, false)
 	if err != nil {
@@ -124,10 +126,10 @@ func (s *store) Delete(ctx context.Context, key string, out runtime.Object, prec
 
 	params := &awsdb.DeleteItemInput{
 		Key: map[string]*awsdb.AttributeValue{
-			primaryKey: &awsdb.AttributeValue{
+			primaryKey: {
 				S: aws.String(key),
 			},
-			sortKey: &awsdb.AttributeValue{
+			sortKey: {
 				S: aws.String(key),
 			},
 		},
@@ -144,12 +146,12 @@ func (s *store) Delete(ctx context.Context, key string, out runtime.Object, prec
 	return s.getObject(key, out, false, resp.Attributes)
 }
 
-func (s *store) Get(ctx context.Context, key string, resourceVersion string, out runtime.Object, ignoreNotFound bool) error {
-	_, err := s.queryObjByKey(key, out, ignoreNotFound)
+func (s *store) Get(ctx context.Context, key string, opts storage.GetOptions, out runtime.Object) error {
+	_, err := s.queryObjByKey(key, out, opts.IgnoreNotFound)
 	return err
 }
 
-func (s *store) GetToList(ctx context.Context, key string, resourceVersion string, p storage.SelectionPredicate, listObj runtime.Object) error {
+func (s *store) GetToList(ctx context.Context, key string, opts storage.ListOptions, listObj runtime.Object) error {
 	listPtr, itemPtr, err := GetListItemObj(listObj)
 	if err != nil {
 		return storage.NewInvalidObjError(key, err.Error())
@@ -180,7 +182,7 @@ func (s *store) GetToList(ctx context.Context, key string, resourceVersion strin
 	// 	klog.V(9).Infof("require pagination limit(%v) skip(%v) perpage(%v) require page(%v)\r\n", limit, skip, perPage, requirePage)
 	// }
 
-	filter, expressionAttrName, expressionAttrValue := BuildScanFilterAttr(itemPtr, p)
+	filter, expressionAttrName, expressionAttrValue := BuildScanFilterAttr(itemPtr, opts.Predicate)
 
 	if len(filter) > 0 {
 		scanParam.FilterExpression = aws.String(filter)
@@ -224,19 +226,20 @@ func (s *store) GetToList(ctx context.Context, key string, resourceVersion strin
 	return decodeList(jsonData, listPtr, s.codec, s.versioner)
 }
 
-func (s *store) List(ctx context.Context, key string, resourceVersion string, p storage.SelectionPredicate, listObj runtime.Object) error {
-	return s.GetToList(ctx, key, resourceVersion, p, listObj)
+func (s *store) List(ctx context.Context, key string, opts storage.ListOptions, listObj runtime.Object) error {
+	return s.GetToList(ctx, key, opts, listObj)
 }
 
-func (s *store) Watch(ctx context.Context, key string, resourceVersion string, p storage.SelectionPredicate) (watch.Interface, error) {
+func (s *store) Watch(ctx context.Context, key string, opts storage.ListOptions) (watch.Interface, error) {
 	return nil, storage.NewInternalError(fmt.Sprintf("the backend of mysql not support wath"))
 }
 
-func (s *store) WatchList(ctx context.Context, key string, resourceVersion string, p storage.SelectionPredicate) (watch.Interface, error) {
+func (s *store) WatchList(ctx context.Context, key string, opts storage.ListOptions) (watch.Interface, error) {
 	return nil, storage.NewInternalError(fmt.Sprintf("the backend of mysql not support wath"))
 }
 
-func (s *store) GuaranteedUpdate(ctx context.Context, key string, out runtime.Object, ignoreNotFound bool, precondtions *storage.Preconditions, tryUpdate storage.UpdateFunc, suggestion ...runtime.Object) error {
+func (s *store) GuaranteedUpdate(ctx context.Context, key string, out runtime.Object,
+	ignoreNotFound bool, precondtions *storage.Preconditions, tryUpdate storage.UpdateFunc, cachedExistingObject runtime.Object) error {
 	//check item with this key exist,we need replace this by aws PutItem
 	_, err := s.queryObjByKey(key, out, false)
 	if err != nil {
