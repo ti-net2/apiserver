@@ -1,6 +1,6 @@
 // This is a generated file. Do not edit directly.
 
-module ti-net2/apiserver
+module github.com/ti-net2/apiserver
 
 go 1.18
 
